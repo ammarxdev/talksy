@@ -1,0 +1,25 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "TypeScript Watch",
+            "type": "shell",
+            "command": "npx",
+            "args": ["tsc", "--watch", "--noEmit", "--project", "./tsconfig.json"],
+            "group": "build",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "isBackground": true,
+            "problemMatcher": "$tsc-watch",
+            "runOptions": {
+                "runOn": "folderOpen"
+            }
+        }
+    ]
+}

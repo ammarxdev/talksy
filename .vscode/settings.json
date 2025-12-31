@@ -1,0 +1,11 @@
+{
+    "typescript.validate.enable": true,
+    "typescript.workspaceSymbols.scope": "allOpenProjects",
+    "typescript.preferences.includePackageJsonAutoImports": "on",
+    "typescript.suggest.autoImports": true,
+    "typescript.updateImportsOnFileMove.enabled": "always",
+    "typescript.suggest.includeAutomaticOptionalChainCompletions": true,
+    "typescript.suggest.includeCompletionsForImportStatements": true,
+    "typescript.tsdk": "node_modules\\typescript\\lib",
+    "typescript.tsserver.experimental.enableProjectDiagnostics": true
+}
