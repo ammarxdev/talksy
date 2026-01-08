@@ -29,9 +29,8 @@
       "env": {
         "NODE_ENV": "production",
         "EXPO_PUBLIC_USE_REAL_ADS": "false",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://mcltjlfzzrznklssctws.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1jbHRqbGZ6enJ6bmtsc3NjdHdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI4MzgzOTIsImV4cCI6MjA2ODQxNDM5Mn0.nizG142TwX8cFOs7HZ7-Wa098gWTi-N7h4bkP2oJieA",
-        "GEMINI_API_KEY": "AIzaSyCi1iF2UplmOyvRb24CsQ6brjIq35mQQqY",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://tqkygmcsiillcrswdaja.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxa3lnbWNzaWlsbGNyc3dkYWphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcwMDI3NzcsImV4cCI6MjA4MjU3ODc3N30.07yPXZ6S1yRBEFch1P-Jr5du4-bATwamRRUkYmP9ThA",
         "OPENWEATHER_API_KEY": "9c913bd34f278338c7008ffb74069a86"
       }
     },
@@ -43,9 +42,8 @@
       "env": {
         "NODE_ENV": "production",
         "EXPO_PUBLIC_USE_REAL_ADS": "true",
-        "EXPO_PUBLIC_SUPABASE_URL": "https://mcltjlfzzrznklssctws.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1jbHRqbGZ6enJ6bmtsc3NjdHdzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTI4MzgzOTIsImV4cCI6MjA2ODQxNDM5Mn0.nizG142TwX8cFOs7HZ7-Wa098gWTi-N7h4bkP2oJieA",
-        "GEMINI_API_KEY": "AIzaSyCi1iF2UplmOyvRb24CsQ6brjIq35mQQqY",
+        "EXPO_PUBLIC_SUPABASE_URL": "https://tqkygmcsiillcrswdaja.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxa3lnbWNzaWlsbGNyc3dkYWphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcwMDI3NzcsImV4cCI6MjA4MjU3ODc3N30.07yPXZ6S1yRBEFch1P-Jr5du4-bATwamRRUkYmP9ThA",
         "OPENWEATHER_API_KEY": "9c913bd34f278338c7008ffb74069a86"
       }
     }

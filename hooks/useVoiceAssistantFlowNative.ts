@@ -77,7 +77,9 @@ export function useVoiceAssistantFlowNative(): UseVoiceAssistantFlowReturn {
   const [conversationHistory, setConversationHistory] = useState<ConversationTurn[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  
+
+
+
   // Refs for timing
   const turnStartTime = useRef<Date | null>(null);
   const speechStartTime = useRef<Date | null>(null);
@@ -86,11 +88,14 @@ export function useVoiceAssistantFlowNative(): UseVoiceAssistantFlowReturn {
   const waitingForTTSDoneRef = useRef<boolean>(false);
   // Track last processed transcript to avoid double-processing and to process even if assistantState changed
   const lastProcessedFinalTextRef = useRef<string>('');
+  const lastProcessedTimeRef = useRef<number>(0);
   // Retry management to gracefully handle Android BUSY/cooldown internally
   const pendingStartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryCountRef = useRef<number>(0);
+  const lastSpeechErrorRef = useRef<string>('');
+  const lastSpeechErrorAtRef = useRef<number>(0);
   const MAX_BUSY_RETRIES = 6;
-  
+
   // Hooks
   const speechRecognition = useNativeSpeechRecognition();
   const aiResponse = useAIResponse();
@@ -179,7 +184,7 @@ export function useVoiceAssistantFlowNative(): UseVoiceAssistantFlowReturn {
       lastProcessedFinalTextRef.current = '';
 
       setAssistantState('listening');
-      
+
       // Create new turn and start timing
       const newTurn = createNewTurn();
       setCurrentTurn(newTurn);
@@ -230,24 +235,120 @@ export function useVoiceAssistantFlowNative(): UseVoiceAssistantFlowReturn {
     }
   }, [speechRecognition, createNewTurn, alert]);
 
-  // Stop listening
+  // Stop listening (microphone only)
   const stopListening = useCallback(async () => {
-    speechRecognition.stopListening();
+    console.log('Stopping microphone listening...');
+
+    try {
+      // Stop speech recognition (microphone input only)
+      speechRecognition.stopListening();
+
+      // Clear any pending timeouts
+      if (pendingStartTimeoutRef.current) {
+        clearTimeout(pendingStartTimeoutRef.current);
+        pendingStartTimeoutRef.current = null;
+      }
+
+      // Reset retry counter
+      retryCountRef.current = 0;
+
+      // Reset TTS waiting flag
+      waitingForTTSDoneRef.current = false;
+
+      // NOTE: Don't reset assistantState to idle here
+      // Let the natural flow continue from listening -> processing -> thinking -> speaking
+      // This allows AI to process whatever was captured before stopping
+
+      // Clear any errors
+      speechRecognition.clearError();
+
+      // If there is active speech, set state to processing immediately for better UX
+      if (speechRecognition.currentText.trim()) {
+        setAssistantState('processing');
+      }
+
+      console.log('Microphone listening stopped successfully');
+    } catch (error) {
+      console.error('Error in stopListening:', error);
+      // Ensure we clear errors even if there's an error
+      speechRecognition.clearError();
+    }
+  }, [speechRecognition]);
+
+  // Stop everything (microphone + AI processing)
+  const stopConversation = useCallback(async () => {
+    console.log('Stopping entire conversation...');
+
+    try {
+      // Stop speech recognition
+      speechRecognition.stopListening();
+
+      // Clear any pending timeouts
+      if (pendingStartTimeoutRef.current) {
+        clearTimeout(pendingStartTimeoutRef.current);
+        pendingStartTimeoutRef.current = null;
+      }
+
+      // Reset retry counter
+      retryCountRef.current = 0;
+
+      // Reset last processed transcript
+      lastProcessedFinalTextRef.current = '';
+
+      // Reset TTS waiting flag
+      waitingForTTSDoneRef.current = false;
+
+      // Clear current turn
+      setCurrentTurn(null);
+
+      // Reset assistant state to idle
+      setAssistantState('idle');
+
+      // Clear any errors
+      setError(null);
+      speechRecognition.clearError();
+
+      console.log('Conversation stopped and state reset successfully');
+    } catch (error) {
+      console.error('Error in stopConversation:', error);
+      // Ensure we reset state even if there's an error
+      setAssistantState('idle');
+      setError(null);
+      setCurrentTurn(null);
+    }
   }, [speechRecognition]);
 
   // Process final speech result
   const processFinalResult = useCallback(async (text: string, confidence: number, recordingUri?: string) => {
-    if (!currentTurn || !text.trim()) {
+    const now = Date.now();
+    const cleanText = text.trim();
+
+    if (!currentTurn || !cleanText) {
       setAssistantState('idle');
       return;
     }
 
+    // STRICT DEDUPLICATION: Check if we processed this exact text recently
+    const isDuplicateText = cleanText === lastProcessedFinalTextRef.current;
+    const isRecent = (now - lastProcessedTimeRef.current) < 2000; // 2 second window
+
+    if (isDuplicateText && isRecent) {
+      console.log(`[useVoiceAssistantFlowNative.ts] [DUPLICATE_REQUEST_IGNORED] Ignoring duplicate text: "${cleanText}" (processed ${now - lastProcessedTimeRef.current}ms ago)`);
+      return;
+    }
+
+    // Update deduplication refs
+    lastProcessedFinalTextRef.current = cleanText;
+    lastProcessedTimeRef.current = now;
+
+    console.log(`[useVoiceAssistantFlowNative.ts] Processing new request: "${cleanText}"`);
+
     try {
       setAssistantState('processing');
-      
+
       // Calculate speech duration
-      const speechDuration = speechStartTime.current 
-        ? Date.now() - speechStartTime.current.getTime() 
+      const speechDuration = speechStartTime.current
+        ? Date.now() - speechStartTime.current.getTime()
         : 0;
 
       // Update turn with speech results
@@ -266,15 +367,15 @@ export function useVoiceAssistantFlowNative(): UseVoiceAssistantFlowReturn {
       // Generate AI response
       setAssistantState('thinking');
       aiStartTime.current = new Date();
-      
+
       const aiResult = await aiResponse.generateResponse(text);
-      
+
       if (!aiResult) {
-        throw new Error('Failed to generate AI response');
+        throw new Error('AI service is currently unavailable. Please try again in a moment.');
       }
 
-      const aiDuration = aiStartTime.current 
-        ? Date.now() - aiStartTime.current.getTime() 
+      const aiDuration = aiStartTime.current
+        ? Date.now() - aiStartTime.current.getTime()
         : 0;
 
       // Update turn with AI response
@@ -331,7 +432,7 @@ export function useVoiceAssistantFlowNative(): UseVoiceAssistantFlowReturn {
 
                 try {
                   const result = await phoneCallService.makePhoneCall(selectedPhone.number);
-                  
+
                   if (result.success) {
                     // Speak confirmation with more natural language
                     const confirmationMessage = selectedPhone.label.toLowerCase() === 'mobile'
@@ -403,28 +504,38 @@ export function useVoiceAssistantFlowNative(): UseVoiceAssistantFlowReturn {
       ttsStartTime.current = new Date();
       waitingForTTSDoneRef.current = true;
 
-      await speakWithCharacter(aiResult.text, {
-        onStart: () => {
-          waitingForTTSDoneRef.current = true;
-        },
-        onDone: () => {
-          waitingForTTSDoneRef.current = false;
-        },
-        onStopped: () => {
-          waitingForTTSDoneRef.current = false;
-        },
-        onError: () => {
-          waitingForTTSDoneRef.current = false;
-        },
-      });
-      
-      const ttsDuration = ttsStartTime.current 
-        ? Date.now() - ttsStartTime.current.getTime() 
+      try {
+        await speakWithCharacter(aiResult.text, {
+          onStart: () => {
+            waitingForTTSDoneRef.current = true;
+          },
+          onDone: () => {
+            waitingForTTSDoneRef.current = false;
+          },
+          onStopped: () => {
+            waitingForTTSDoneRef.current = false;
+          },
+          onError: () => {
+            waitingForTTSDoneRef.current = false;
+          },
+        });
+      } catch (ttsError) {
+        console.error('TTS Error:', ttsError);
+        // If TTS fails, still complete the turn but show an error
+        alert.showAlert({
+          title: 'Voice Error',
+          message: 'I was able to process your request, but I had trouble speaking the response.',
+          type: 'warning'
+        });
+      }
+
+      const ttsDuration = ttsStartTime.current
+        ? Date.now() - ttsStartTime.current.getTime()
         : 0;
 
       // Calculate total duration and finalize turn
-      const totalDuration = turnStartTime.current 
-        ? Date.now() - turnStartTime.current.getTime() 
+      const totalDuration = turnStartTime.current
+        ? Date.now() - turnStartTime.current.getTime()
         : 0;
 
       const finalTurn: ConversationTurn = {
@@ -445,12 +556,13 @@ export function useVoiceAssistantFlowNative(): UseVoiceAssistantFlowReturn {
 
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to process speech';
+      console.error('Voice assistant error:', err);
 
       // Check if it's a cooldown error
       const isCooldownError = (err as any).isCooldown === true;
 
       if (isCooldownError) {
-        // Show custom cooldown alert
+        // Show custom cooldown alert and speak response
         alert.showAlert({
           title: '🎤 Voice Assistant Cooldown',
           message: 'Please wait a moment before speaking again. The voice recognition service needs a brief cooldown period to ensure optimal performance.',
@@ -462,19 +574,42 @@ export function useVoiceAssistantFlowNative(): UseVoiceAssistantFlowReturn {
             }
           ]
         });
+
+        // Speak cooldown error
+        await speakWithCharacter('Please wait a moment before speaking again. The voice service needs a brief cooldown period.');
       } else {
-        // Handle other errors normally
+        // Handle other errors with spoken feedback
         setError(errorMessage);
         alert.showAlert({
           title: 'Error',
           message: errorMessage,
           type: 'error'
         });
+
+        // Determine user-friendly error message to speak
+        let spokenErrorMessage = 'Sorry, I encountered an error processing your request.';
+
+        if (errorMessage.toLowerCase().includes('network') || errorMessage.toLowerCase().includes('connection')) {
+          spokenErrorMessage = 'Sorry, I\'m having trouble connecting to the internet. Please check your connection and try again.';
+        } else if (errorMessage.toLowerCase().includes('api') || errorMessage.toLowerCase().includes('server')) {
+          spokenErrorMessage = 'Sorry, the AI service is currently unavailable. Please try again in a moment.';
+        } else if (errorMessage.toLowerCase().includes('speech') || errorMessage.toLowerCase().includes('recognition')) {
+          spokenErrorMessage = 'Sorry, I had trouble understanding what you said. Please try speaking again.';
+        } else if (errorMessage.toLowerCase().includes('timeout')) {
+          spokenErrorMessage = 'Sorry, the request took too long. Please try again.';
+        } else if (errorMessage.toLowerCase().includes('permission')) {
+          spokenErrorMessage = 'Sorry, I need microphone permission to hear you. Please enable microphone access in your settings.';
+        } else {
+          spokenErrorMessage = `Sorry, something went wrong. ${errorMessage}`;
+        }
+
+        // Speak the error message
+        await speakWithCharacter(spokenErrorMessage);
       }
 
       setAssistantState('idle');
     }
-  }, [currentTurn, aiResponse, textToSpeech, notifications, alert, startListening, assistantState]);
+  }, [currentTurn, aiResponse, textToSpeech, notifications, alert, startListening, assistantState, speakWithCharacter]);
 
   // Handle speech recognition events
   useEffect(() => {
@@ -498,9 +633,23 @@ export function useVoiceAssistantFlowNative(): UseVoiceAssistantFlowReturn {
   // Handle speech recognition errors
   useEffect(() => {
     if (speechRecognition.error) {
+      const errorText = speechRecognition.error;
+
+      // De-dupe repeated identical errors so we don't spam logs or TTS.
+      const now = Date.now();
+      if (lastSpeechErrorRef.current === errorText && now - lastSpeechErrorAtRef.current < 15000) {
+        speechRecognition.clearError();
+        return;
+      }
+      lastSpeechErrorRef.current = errorText;
+      lastSpeechErrorAtRef.current = now;
+
+      console.error('Speech recognition error:', errorText);
+
       // Check if it's a cooldown error
-      const isCooldownError = speechRecognition.error.startsWith('COOLDOWN_ERROR:');
-      const isNoSpeechError = /no\s*-?speech/i.test(speechRecognition.error);
+      const isCooldownError = errorText.startsWith('COOLDOWN_ERROR:');
+      const isNoSpeechError = /no\s*-?speech/i.test(errorText);
+      const isLanguageNotDownloaded = /not\s+yet\s+downloaded/i.test(errorText);
 
       if (isCooldownError) {
         // Silently clear cooldown errors; auto-retry logic in startListening will handle it
@@ -509,12 +658,32 @@ export function useVoiceAssistantFlowNative(): UseVoiceAssistantFlowReturn {
         // Treat 'no-speech' as benign: clear without changing assistant state
         speechRecognition.clearError();
       } else {
-        // Handle other errors normally
-        setError(speechRecognition.error);
+        // Handle other errors with spoken feedback
+        setError(errorText);
         setAssistantState('idle');
+
+        // Determine user-friendly error message to speak
+        let spokenErrorMessage = 'Sorry, I encountered an error with speech recognition.';
+
+        if (isLanguageNotDownloaded) {
+          spokenErrorMessage = 'Speech recognition language is not downloaded on this device. Please download the language in your phone settings, then try again.';
+        } else if (errorText.toLowerCase().includes('permission')) {
+          spokenErrorMessage = 'Sorry, I need microphone permission to hear you. Please enable microphone access in your settings.';
+        } else if (errorText.toLowerCase().includes('network') || errorText.toLowerCase().includes('connection')) {
+          spokenErrorMessage = 'Sorry, I\'m having trouble connecting to the speech recognition service. Please check your internet connection.';
+        } else if (errorText.toLowerCase().includes('busy') || errorText.toLowerCase().includes('unavailable')) {
+          spokenErrorMessage = 'Sorry, the speech recognition service is currently busy. Please try again in a moment.';
+        } else {
+          spokenErrorMessage = 'Sorry, I had trouble with speech recognition. Please try again.';
+        }
+
+        // Speak the error message
+        speakWithCharacter(spokenErrorMessage).catch(err => {
+          console.error('Failed to speak error message:', err);
+        });
       }
     }
-  }, [speechRecognition.error, alert, speechRecognition]);
+  }, [speechRecognition.error, alert, speechRecognition, speakWithCharacter]);
 
   // Handle TTS completion
   useEffect(() => {
@@ -587,12 +756,12 @@ export function useVoiceAssistantFlowNative(): UseVoiceAssistantFlowReturn {
     // Actions
     startListening,
     stopListening,
+    stopConversation, // New function to stop everything
     clearError,
     clearHistory,
 
     // Compatibility with main app interface
     startConversation: startListening, // Same functionality
-    stopConversation: stopListening,   // Same functionality
     resetConversation,
     getStatusText,
 

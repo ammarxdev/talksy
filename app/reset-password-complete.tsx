@@ -39,11 +39,10 @@ export default function ResetPasswordCompleteScreen() {
 
   useEffect(() => {
     // Check if user is authenticated and this is a password reset flow
-    if (user && isPasswordResetFlow) {
+    if (user) {
+      // If a session exists, allow password update. Some recovery flows create a session
+      // without reliably setting the local isPasswordResetFlow flag.
       setIsValidSession(true);
-    } else if (user && !isPasswordResetFlow) {
-      // User is authenticated but not in password reset flow, redirect to main app
-      router.replace('/(tabs)');
     } else if (!authLoading && !user) {
       // Only redirect if we're not loading and there's no user
       setTimeout(() => {
@@ -51,7 +50,7 @@ export default function ResetPasswordCompleteScreen() {
         router.replace('/auth');
       }, 3000); // Increased delay to allow for session establishment
     }
-  }, [user, authLoading, isPasswordResetFlow]);
+  }, [user, authLoading]);
 
   const handleGoBack = () => {
     router.back();
@@ -154,7 +153,11 @@ export default function ResetPasswordCompleteScreen() {
         style={styles.keyboardView}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           {/* Instructions */}
           <View style={styles.instructionsContainer}>
             <View style={[styles.iconContainer, { backgroundColor: colors.success + '20' }]}>
@@ -310,7 +313,10 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
     padding: 20,
+    paddingBottom: 40,
   },
   loadingContainer: {
     flex: 1,

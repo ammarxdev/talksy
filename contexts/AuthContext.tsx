@@ -1,5 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase, User, Session, redirectUrl, createSessionFromUrl, isSupabaseConfigured } from '../config/supabase';
+import {
+  supabase,
+  User,
+  Session,
+  redirectUrl,
+  resetPasswordRedirectUrl,
+  createSessionFromUrl,
+  isSupabaseConfigured,
+  clearSupabaseAuthStorage,
+} from '../config/supabase';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
@@ -48,6 +57,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const [isPasswordResetFlow, setIsPasswordResetFlow] = useState(false);
 
+  const waitForSession = async (timeoutMs: number = 6000, intervalMs: number = 250) => {
+    if (!isSupabaseConfigured || !supabase) return null;
+
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) return session;
+      await new Promise(resolve => setTimeout(resolve, intervalMs));
+    }
+    return null;
+  };
+
   useEffect(() => {
     // Get initial session
     const getInitialSession = async () => {
@@ -57,17 +78,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
         return;
       }
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        setUser(session?.user ?? null);
+      } catch (error: any) {
+        const message = String(error?.message ?? error);
+        if (message.includes('Invalid Refresh Token')) {
+          // Stored session is corrupted/expired. Clear it and force fresh login.
+          await clearSupabaseAuthStorage();
+          setSession(null);
+          setUser(null);
+        } else {
+          console.error('Error getting initial session:', error);
+        }
+      } finally {
+        setLoading(false);
+      }
     };
 
     getInitialSession();
 
     // Listen for auth changes (only when Supabase is configured)
     const subscription = (isSupabaseConfigured && supabase)
-      ? supabase.auth.onAuthStateChange(async (_, session) => {
+      ? supabase.auth.onAuthStateChange(async (event, session) => {
+          const eventName = String(event);
+          if (eventName === 'TOKEN_REFRESH_FAILED') {
+            await clearSupabaseAuthStorage();
+            setSession(null);
+            setUser(null);
+            setLoading(false);
+            return;
+          }
           setSession(session);
           setUser(session?.user ?? null);
           setLoading(false);
@@ -76,7 +119,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     // Handle deep linking for OAuth redirects and password reset (official Supabase approach)
     const handleDeepLink = async (url: string) => {
-      if (url && (url.includes('#access_token=') || url.includes('token_hash=') || url.includes('type=recovery'))) {
+      if (
+        url &&
+        (
+          url.includes('access_token=') ||
+          url.includes('refresh_token=') ||
+          url.includes('token_hash=') ||
+          url.includes('type=recovery')
+        )
+      ) {
         try {
           await createSessionFromUrl(url);
 
@@ -164,7 +215,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: 'http://localhost:8081/auth/callback',
+            redirectTo: 'http://localhost:8081/auth',
             queryParams: {
               access_type: 'offline',
               prompt: 'consent',
@@ -203,15 +254,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const { url } = result;
             await createSessionFromUrl(url);
             return { error: null };
-          } else {
-            return { error: new Error('OAuth cancelled or failed') };
           }
+
+          // On Android, the browser may close/dismiss while the deep-link handler still
+          // successfully creates a session. Avoid showing a false "failed" popup.
+          const sessionAfter = await waitForSession();
+          if (sessionAfter) {
+            return { error: null };
+          }
+
+          return { error: new Error('OAuth cancelled or failed') };
         }
 
         return { error: new Error('No OAuth URL received') };
       }
     } catch (error) {
       console.error('Google OAuth error:', error);
+
+      // If the session was created via deep link despite an exception, treat as success.
+      const sessionAfter = await waitForSession();
+      if (sessionAfter) {
+        return { error: null };
+      }
+
       return { error };
     } finally {
       setLoading(false);
@@ -254,7 +319,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       if (!isSupabaseConfigured || !supabase) return { error: new Error('Auth not configured') };
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: redirectUrl,
+        redirectTo: resetPasswordRedirectUrl,
       });
       return { error };
     } catch (error) {

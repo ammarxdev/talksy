@@ -1,4 +1,5 @@
 import { API_CONFIG } from '@/config/api';
+import { supabase, isSupabaseConfigured } from '@/config/supabase';
 import { weatherService, WeatherData } from './WeatherService';
 import { locationService, LocationData } from './LocationService';
 import { contactCallingService, ContactSearchResult } from './ContactCallingService';
@@ -96,7 +97,7 @@ export class AIResponseService {
     // Additional check: if message contains "time" but also location without weather context
     const timeWithLocationPattern = /(?:time|date).*(?:in|at|for)\s+[a-zA-Z\s,]+/i;
     const hasTimeWithLocation = timeWithLocationPattern.test(lowerMessage) &&
-                               !this.isWeatherQuery(message);
+      !this.isWeatherQuery(message);
 
     return hasStandaloneTimeKeyword || hasTimeWithLocation;
   }
@@ -401,9 +402,9 @@ export class AIResponseService {
       'reply in', 'respond in', 'answer in', 'speak in', 'talk in', 'say in', 'use', 'in language',
     ];
     const languages = [
-      'hindi','urdu','punjabi','arabic','spanish','french','german','chinese','japanese','korean',
-      'italian','portuguese','russian','turkish','bengali','tamil','telugu','marathi','gujarati',
-      'thai','indonesian','vietnamese','malay','persian','farsi','hebrew'
+      'hindi', 'urdu', 'punjabi', 'arabic', 'spanish', 'french', 'german', 'chinese', 'japanese', 'korean',
+      'italian', 'portuguese', 'russian', 'turkish', 'bengali', 'tamil', 'telugu', 'marathi', 'gujarati',
+      'thai', 'indonesian', 'vietnamese', 'malay', 'persian', 'farsi', 'hebrew'
     ];
 
     const simpleInLangMatch = /\b(?:in|into)\s+([a-z]+)/i.exec(text);
@@ -610,7 +611,7 @@ export class AIResponseService {
     if (/\btomorrow'?s?\b|\btmr\b|\bfor\s+tomorrow\b/.test(text)) return { when: 'tomorrow' };
 
     // Weekday handling (next occurrence including today)
-    const weekdays = ['sunday','monday','tuesday','wednesday','thursday','friday','saturday'];
+    const weekdays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
     for (let i = 0; i < weekdays.length; i++) {
       const w = weekdays[i];
       const re = new RegExp(`\\b${w}\\b`, 'i');
@@ -620,7 +621,7 @@ export class AIResponseService {
         let delta = i - todayIdx;
         if (delta < 0) delta += 7; // upcoming occurrence
         const target = new Date(now);
-        target.setHours(0,0,0,0);
+        target.setHours(0, 0, 0, 0);
         target.setDate(now.getDate() + delta);
         const yyyy = target.getFullYear();
         const mm = String(target.getMonth() + 1).padStart(2, '0');
@@ -649,7 +650,7 @@ export class AIResponseService {
     }
 
     // Explicit month name, e.g., "12 September" or "September 12"
-    const months = ['january','february','march','april','may','june','july','august','september','october','november','december'];
+    const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
     // "12 September" pattern
     m = userMessage.match(/\b(\d{1,2})\s+([a-zA-Z]+)\b/);
     if (m) {
@@ -659,8 +660,8 @@ export class AIResponseService {
         const now = new Date();
         const yyyy = now.getFullYear();
         const target = new Date(yyyy, monIdx, parseInt(dd, 10));
-        const iso = `${target.getFullYear()}-${String(target.getMonth()+1).padStart(2,'0')}-${String(target.getDate()).padStart(2,'0')}`;
-        const label = `${months[monIdx].charAt(0).toUpperCase()+months[monIdx].slice(1)} ${dd}`;
+        const iso = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`;
+        const label = `${months[monIdx].charAt(0).toUpperCase() + months[monIdx].slice(1)} ${dd}`;
         // If the date already passed this year, keep it as is; forecast may simply be unavailable and code will handle it.
         return { when: 'date', date: iso, label };
       }
@@ -674,8 +675,8 @@ export class AIResponseService {
         const now = new Date();
         const yyyy = now.getFullYear();
         const target = new Date(yyyy, monIdx, parseInt(dd, 10));
-        const iso = `${target.getFullYear()}-${String(target.getMonth()+1).padStart(2,'0')}-${String(target.getDate()).padStart(2,'0')}`;
-        const label = `${months[monIdx].charAt(0).toUpperCase()+months[monIdx].slice(1)} ${dd}`;
+        const iso = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`;
+        const label = `${months[monIdx].charAt(0).toUpperCase() + months[monIdx].slice(1)} ${dd}`;
         return { when: 'date', date: iso, label };
       }
     }
@@ -803,7 +804,7 @@ export class AIResponseService {
 
         // Handle special case where the name might include trailing punctuation or "on mobile"
         contactName = contactName.replace(/\s+(on\s+mobile|on\s+cell|at\s+home|at\s+work)$/i, '').trim();
-        
+
         // Remove trailing punctuation
         contactName = contactName.replace(/[.!?]+$/, '').trim();
 
@@ -977,23 +978,8 @@ Rules:
         ],
       };
 
-      const response = await fetch(
-        `${API_CONFIG.GEMINI.BASE_URL}/models/${API_CONFIG.GEMINI.MODEL}:generateContent`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-goog-api-key': API_CONFIG.GEMINI.API_KEY,
-          },
-          body: JSON.stringify(requestBody),
-        }
-      );
-
-      if (!response.ok) {
-        return null;
-      }
-
-      const data = await response.json();
+      const data = await this.invokeGeminiProxy(requestBody).catch(() => null);
+      if (!data) return null;
       const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? '';
       if (!raw) return null;
 
@@ -1003,7 +989,7 @@ Rules:
       } catch {
         const match = raw.match(/\{[\s\S]*\}/);
         if (match) {
-          try { parsed = JSON.parse(match[0]); } catch {}
+          try { parsed = JSON.parse(match[0]); } catch { }
         }
       }
 
@@ -1035,7 +1021,7 @@ Rules:
    */
   async generateResponse(userMessage: string): Promise<AIResponse> {
     try {
-      console.log('Generating AI response for:', userMessage);
+      console.log(`[AIResponseService.ts] Generating AI response for: ${userMessage}`);
 
       if (!this.isConfigured()) {
         throw new Error('Gemini AI service is not properly configured. Please check your API key.');
@@ -1208,28 +1194,11 @@ Rules:
       };
 
       // Make API request to Gemini
-      const response = await fetch(
-        `${API_CONFIG.GEMINI.BASE_URL}/models/${API_CONFIG.GEMINI.MODEL}:generateContent`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-goog-api-key': API_CONFIG.GEMINI.API_KEY,
-          },
-          body: JSON.stringify(requestBody),
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(`Gemini API error: ${response.status} - ${errorData.error?.message || response.statusText}`);
-      }
-
-      const data = await response.json();
+      const data = await this.invokeGeminiProxy(requestBody);
 
       // Extract the response text
       const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-      
+
       if (!responseText) {
         throw new Error('No response text received from Gemini AI');
       }
@@ -1242,7 +1211,7 @@ Rules:
 
       const aiResponse: AIResponse = {
         text: sanitizedText,
-        model: API_CONFIG.GEMINI.MODEL,
+        model: data?._talksy?.model || 'gemini',
         timestamp: new Date(),
         usage: data.usageMetadata ? {
           promptTokens: data.usageMetadata.promptTokenCount || 0,
@@ -1255,7 +1224,7 @@ Rules:
       return aiResponse;
     } catch (error) {
       console.error('AI response generation error:', error);
-      
+
       if (error instanceof Error) {
         throw new Error(`Failed to generate AI response: ${error.message}`);
       } else {
@@ -1368,8 +1337,48 @@ Please respond naturally and helpfully:`;
    * Check if the service is properly configured
    */
   isConfigured(): boolean {
-    return !!API_CONFIG.GEMINI.API_KEY && 
-           API_CONFIG.GEMINI.API_KEY !== 'your_gemini_api_key_here';
+    return !!isSupabaseConfigured && !!supabase;
+  }
+
+  private async invokeGeminiProxy(requestBody: Record<string, any>): Promise<any> {
+    if (!isSupabaseConfigured || !supabase) {
+      throw new Error('Supabase is not configured. Please set EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.');
+    }
+
+    const { data, error } = await supabase.functions.invoke('gemini-proxy', {
+      body: requestBody as any,
+    });
+
+    if (error) {
+      const errAny = error as any;
+      const status = errAny?.context?.response?.status ?? errAny?.context?.status;
+      const rawBody = errAny?.context?.body;
+
+      let bodyDetails: string | undefined;
+      if (typeof rawBody === 'string' && rawBody.length) {
+        try {
+          bodyDetails = JSON.stringify(JSON.parse(rawBody));
+        } catch {
+          bodyDetails = rawBody;
+        }
+      }
+
+      throw new Error(
+        `gemini-proxy failed${status ? ` (${status})` : ''}: ${error.message || 'Edge Function error'}${bodyDetails ? ` | ${bodyDetails}` : ''}`
+      );
+    }
+
+    if (!data) {
+      throw new Error('No data returned from gemini-proxy');
+    }
+
+    // If the Edge Function returns a structured error, surface it.
+    if (typeof data === 'object' && data?.error) {
+      const details = typeof data?.response === 'object' ? JSON.stringify(data.response) : (data?.details || '');
+      throw new Error(`${data.error}${details ? `: ${details}` : ''}`);
+    }
+
+    return data;
   }
 
   /**

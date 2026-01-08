@@ -11,6 +11,7 @@ import { voiceSessionTracker } from '@/utils/voiceSessionTracker';
 import { queryAdCounter } from '@/utils/queryAdCounter';
 
 import { useVoiceAssistantFlowNative } from '@/hooks/useVoiceAssistantFlowNative';
+import { useVoiceAssistantContext, updateVoiceAssistantState } from '@/components/VoiceAssistantProviderWrapper';
 import { useResponsive, useResponsiveSpacing, useResponsiveTypography, useResponsiveLayout } from '@/hooks/useResponsive';
 import React, { useEffect, useRef, useCallback, useState } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
@@ -25,26 +26,29 @@ export default function VoiceAssistantScreen() {
   const { recordInteraction } = useAdMob();
   const { showAd: showInterstitialAd } = useInterstitialAd();
   const isDark = colorScheme === 'dark';
-  
+
   // Responsive hooks
   const responsive = useResponsive();
   const spacing = useResponsiveSpacing();
   const typography = useResponsiveTypography();
   const layout = useResponsiveLayout();
-  
+
   // Create responsive styles
   const styles = createStyles(responsive, spacing, typography, layout);
 
   // Debug logging removed
 
+  // Use the global voice assistant context
   const {
     assistantState,
     startConversation,
     stopConversation,
+    stopListening,
     getStatusText,
     isVADActive,
     currentVolume,
-  } = useVoiceAssistantFlowNative();
+    isListening,
+  } = useVoiceAssistantContext();
 
 
 
@@ -195,9 +199,12 @@ export default function VoiceAssistantScreen() {
   }, [assistantState]);
 
   const handleAvatarPress = useCallback(async () => {
+    console.log('Avatar pressed - current state:', assistantState);
+
     // Debounce ultra-rapid taps (UI-level guard)
     const now = Date.now();
     if (tapLockRef.current && now - lastTapTimeRef.current < 300) {
+      console.log('Tap debounced, ignoring');
       return;
     }
     tapLockRef.current = true;
@@ -209,19 +216,20 @@ export default function VoiceAssistantScreen() {
     recordInteraction();
 
     if (assistantState === 'idle') {
+      console.log('Starting conversation');
       // Start conversation - VAD will automatically stop when user stops speaking
       await startConversation();
     } else if (assistantState === 'listening') {
-      // With VAD active, don't allow manual stop - let VAD handle it automatically
-      // Only allow manual stop if VAD is not working (fallback mode)
-      if (!isVADActive) {
-        await stopConversation();
-      }
-      // If VAD is active, ignore the tap - let VAD automatically detect speech end
+      console.log('Stopping conversation from listening state');
+      // Use stopConversation to completely stop everything when user taps microphone
+      await stopConversation();
     } else if (assistantState === 'speaking') {
-      // Stop AI speaking
+      console.log('Stopping conversation from speaking state');
+      // Use stopConversation to completely stop everything when user taps microphone
       await stopConversation();
       // No interstitial trigger here; we trigger on completed query when state returns to idle
+    } else {
+      console.log('Avatar pressed but state is:', assistantState, '- taking no action');
     }
     // Note: With VAD, users typically only need to tap once to start speaking
   }, [assistantState, isVADActive, startConversation, stopConversation, recordInteraction]);
@@ -238,7 +246,7 @@ export default function VoiceAssistantScreen() {
           locations={[0, 0.5, 0.9, 1]}
           style={styles.gradientBackground}
         />
-        
+
         {/* Layered Background for 3D Depth */}
         <View style={[styles.backgroundLayer1, { backgroundColor: modelColors.surface, opacity: 0.1 }]} />
         <View style={[styles.backgroundLayer2, { backgroundColor: modelColors.surfaceVariant, opacity: 0.05 }]} />
@@ -301,7 +309,7 @@ export default function VoiceAssistantScreen() {
           <Animated.ScrollView
             contentContainerStyle={[
               styles.contentContainer,
-              { 
+              {
                 paddingTop: spacing.md + bannerHeight,
                 paddingHorizontal: layout.containerPadding,
                 paddingBottom: spacing.lg,
@@ -329,14 +337,14 @@ export default function VoiceAssistantScreen() {
               ]}
             >
               <View style={styles.headerContent}>
-                <ThemedText type="title" style={[styles.title, { 
+                <ThemedText type="title" style={[styles.title, {
                   color: isDark ? colors.textPrimary : modelColors.primaryDark,
                   fontSize: typography.adaptiveTitle,
                   lineHeight: typography.getLineHeight(typography.adaptiveTitle),
                 }]}>
                   Voice Assistant
                 </ThemedText>
-                <ThemedText type="subtitle" style={[styles.subtitle, { 
+                <ThemedText type="subtitle" style={[styles.subtitle, {
                   color: isDark ? colors.textSecondary : modelColors.primary,
                   fontSize: typography.adaptiveSubtitle,
                   lineHeight: typography.getLineHeight(typography.adaptiveSubtitle),
@@ -373,31 +381,21 @@ export default function VoiceAssistantScreen() {
                 ] as [string, string, ...string[]]}
                 gradientLocations={[0, 0.3, 0.7, 1] as [number, number, ...number[]]}
                 borderColor={
-                  assistantState === 'listening'
-                    ? colors.success
+                  isListening
+                    ? colors.success  // Green only when microphone is actively listening
                     : assistantState === 'speaking'
-                    ? modelColors.accent
-                    : modelColors.primary
+                      ? modelColors.accent
+                      : modelColors.primary  // Original color when not listening
                 }
                 shadowColor={
-                  assistantState === 'listening'
-                    ? colors.success
+                  isListening
+                    ? colors.success  // Green shadow only when microphone is actively listening
                     : assistantState === 'speaking'
-                    ? modelColors.accent
-                    : modelColors.glow
+                      ? modelColors.accent
+                      : modelColors.glow  // Original shadow color when not listening
                 }
               />
 
-              {/* Enhanced Waveform Animation */}
-              {assistantState === 'listening' && (
-                <View style={styles.waveformContainer}>
-                  <WaveformAnimation
-                    isActive={true}
-                    size="large"
-                    color={colors.success}
-                  />
-                </View>
-              )}
 
               {/* Voice Activity Indicator */}
               {assistantState === 'speaking' && (

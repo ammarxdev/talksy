@@ -81,20 +81,14 @@ export function useNavigationInterstitialAd(config: Partial<NavigationAdConfig> 
     const decision = interstitialAdTiming.shouldShowInterstitialAd(context);
     
     if (decision.shouldShow) {
-      console.log(`🎬 Showing navigation interstitial ad: ${navigationType} - ${decision.reason}`);
-      
       // Add a small delay for better UX
       setTimeout(async () => {
         const result = await showInterstitialAd();
         if (result.success) {
           lastAdTime.current = Date.now();
           navigationCount.current = 0; // Reset counter after showing ad
-        } else {
-          console.log(`⚠️ Navigation interstitial ad not shown: ${result.reason}`);
         }
       }, 1500); // 1.5 second delay for smooth navigation
-    } else {
-      console.log(`⏭️ Skipping navigation interstitial ad: ${decision.reason}`);
     }
   }, [shouldShowNavigationAd, showInterstitialAd]);
 
@@ -116,9 +110,6 @@ export function useNavigationInterstitialAd(config: Partial<NavigationAdConfig> 
     
     if (hasNavigated) {
       navigationCount.current += 1;
-      
-      console.log(`📱 Navigation detected: ${previousSegs.join('/')} → ${currentSegments.join('/')}`);
-      console.log(`📊 Navigation count: ${navigationCount.current}`);
 
       // Determine navigation type
       const isTabSwitch = (
@@ -130,10 +121,8 @@ export function useNavigationInterstitialAd(config: Partial<NavigationAdConfig> 
       );
 
       if (isTabSwitch && finalConfig.enableTabSwitchAds) {
-        console.log(`🔄 Tab switch detected: ${previousSegs[1]} → ${currentSegments[1]}`);
         showNavigationAd('tab_switch');
       } else if (!isTabSwitch && finalConfig.enableScreenNavigationAds) {
-        console.log(`🔄 Screen navigation detected`);
         showNavigationAd('screen_navigation');
       }
 
@@ -161,7 +150,6 @@ export function useNavigationInterstitialAd(config: Partial<NavigationAdConfig> 
     navigationCount.current = 0;
     lastAdTime.current = 0;
     previousSegments.current = [];
-    console.log('🔄 Navigation ad tracking reset');
   }, []);
 
   /**

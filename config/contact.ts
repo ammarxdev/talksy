@@ -5,7 +5,7 @@
 
 // Contact form settings
 export const CONTACT_CONFIG = {
-  RECIPIENT_EMAIL: 'hur3561@gmail.com',
+  RECIPIENT_EMAIL: 'moin.iyan@gmail.com',
   WEB_CONTACT_URL: 'https://bbrewtech.com/contact/',
   MAX_SUBJECT_LENGTH: 100,
   MAX_MESSAGE_LENGTH: 1000,

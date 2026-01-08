@@ -47,6 +47,8 @@ export function useNativeSpeechRecognition(): UseNativeSpeechRecognitionReturn {
   const lastOptionsRef = useRef<{ lang: string; interimResults: boolean; continuous: boolean } | null>(null);
   const startingRecognitionRef = useRef<boolean>(false);
   const lastResultAtRef = useRef<number>(0);
+  const lastErrorAtRef = useRef<number>(0);
+  const lastErrorMessageRef = useRef<string>('');
   // Accumulates committed final segments across grace auto-restarts within one user utterance
   const accumulatedTextRef = useRef<string>('');
 
@@ -65,7 +67,7 @@ export function useNativeSpeechRecognition(): UseNativeSpeechRecognitionReturn {
       transcriptRef.current = '';
       accumulatedTextRef.current = '';
     }
-    
+
     // Request permissions first (like Ai-Tutor)
     const perm = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
     if (!perm?.granted) {
@@ -74,7 +76,7 @@ export function useNativeSpeechRecognition(): UseNativeSpeechRecognitionReturn {
 
     // Use simple configuration like Ai-Tutor - no complex Android intent options
     const lang = options?.language || 'en-US';
-    
+
     try {
       const startOpts: any = {
         lang,
@@ -100,7 +102,7 @@ export function useNativeSpeechRecognition(): UseNativeSpeechRecognitionReturn {
     if (first?.transcript) {
       transcriptRef.current = first.transcript;
       lastResultAtRef.current = Date.now();
-      
+
       if (event.isFinal) {
         // Final segment: append to accumulated text and start a grace period before committing
         const segment = (first.transcript || '').trim();
@@ -119,6 +121,11 @@ export function useNativeSpeechRecognition(): UseNativeSpeechRecognitionReturn {
         setCurrentText(result.text);
         setConfidence(result.confidence);
         setIsTranscribing(false);
+
+        // CRITICAL: Set isListening to false immediately when final result is received
+        // This ensures the stop button hides right away, not after the grace period
+        setIsListening(false);
+
         // Begin or reset grace timer
         if (pendingFinalizeTimerRef.current) {
           clearTimeout(pendingFinalizeTimerRef.current);
@@ -132,25 +139,33 @@ export function useNativeSpeechRecognition(): UseNativeSpeechRecognitionReturn {
             setConfidence(toCommit.confidence);
             pendingFinalResultRef.current = null;
           }
+
+          // CRITICAL: Clear refs here so that when stop() triggers 'end', it doesn't re-process
+          accumulatedTextRef.current = '';
+          transcriptRef.current = '';
+
           pendingFinalizeTimerRef.current = null;
           shouldAutoRestartOnEndRef.current = false;
           // Recognition may already be stopped by 'end' event; ensure state reflects that
           try {
             // Stop any auto-restarted recognition session now that grace has expired
             ExpoSpeechRecognitionModule.stop();
-          } catch {}
+          } catch { }
           setIsListening(false);
           setIsTranscribing(false);
-        }, 2000);
+        }, 1000); // Reduced from 2000ms for faster auto-stop
         // Allow an auto-restart on 'end' to keep listening during grace
         shouldAutoRestartOnEndRef.current = true;
-      } else {
         // Interim result: show accumulated + interim so earlier speech is preserved in UI
         const interimDisplay = accumulatedTextRef.current
           ? `${accumulatedTextRef.current} ${first.transcript}`
           : first.transcript;
         setCurrentText(interimDisplay);
         setConfidence(first.confidence || 0.8);
+
+        // User resumed speaking, show the stop button
+        setIsListening(true);
+
         // If we were planning to finalize, cancel it because user resumed speaking
         if (pendingFinalizeTimerRef.current) {
           clearTimeout(pendingFinalizeTimerRef.current);
@@ -163,14 +178,49 @@ export function useNativeSpeechRecognition(): UseNativeSpeechRecognitionReturn {
   });
 
   useSpeechRecognitionEvent('end', () => {
-    console.log('Speech recognition ended');
+    console.log('Speech recognition ended, shouldAutoRestart:', shouldAutoRestartOnEndRef.current);
+
+    // If shouldAutoRestart is false, user explicitly stopped - clear grace period and don't restart
+    if (!shouldAutoRestartOnEndRef.current) {
+      if (pendingFinalizeTimerRef.current) {
+        clearTimeout(pendingFinalizeTimerRef.current);
+        pendingFinalizeTimerRef.current = null;
+      }
+
+      // CRITICAL: Commit any available text before stopping
+      const accumulated = (accumulatedTextRef.current || '').trim();
+      const spoken = accumulated || (transcriptRef.current || '').trim();
+
+      if (pendingFinalResultRef.current) {
+        const toCommit = pendingFinalResultRef.current;
+        setFinalText(toCommit.text);
+        setCurrentText(toCommit.text);
+        setConfidence(toCommit.confidence);
+        pendingFinalResultRef.current = null;
+      } else if (spoken) {
+        setFinalText(spoken);
+        setCurrentText(spoken);
+        setConfidence(0.8);
+      }
+
+      // Clear refs to prevent any further processing
+      accumulatedTextRef.current = '';
+      transcriptRef.current = '';
+
+      setIsListening(false);
+      setIsTranscribing(false);
+      return;
+    }
+
     // If we are within a grace period, try to keep listening until the timer decides
     if (pendingFinalizeTimerRef.current) {
       if (shouldAutoRestartOnEndRef.current && lastOptionsRef.current && !startingRecognitionRef.current) {
         try {
           startingRecognitionRef.current = true;
           ExpoSpeechRecognitionModule.start(lastOptionsRef.current as any);
-          setIsListening(true);
+          // NOTE: We do NOT set setIsListening(true) here. 
+          // We keep the microphone open in the background, but the UI stays "not listening"
+          // until actual interim results are received.
         } catch (e) {
           console.log('Auto-restart after end failed', e);
         } finally {
@@ -208,19 +258,64 @@ export function useNativeSpeechRecognition(): UseNativeSpeechRecognitionReturn {
     const errorMessage = (event?.message || event?.error || 'Speech recognition error').toString();
     const isNoSpeech = /no\s*-?speech/i.test(errorMessage);
 
+    // Prevent any "grace" auto-restart behavior from keeping us in a loop.
+    shouldAutoRestartOnEndRef.current = false;
+
+    // De-dupe repeated identical errors fired in quick succession
+    const now = Date.now();
+    const sameAsLast = lastErrorMessageRef.current === errorMessage;
+    if (sameAsLast && now - lastErrorAtRef.current < 3000) {
+      // Keep state consistent but avoid re-emitting the same error over and over
+      setIsListening(false);
+      setIsTranscribing(false);
+      return;
+    }
+    lastErrorMessageRef.current = errorMessage;
+    lastErrorAtRef.current = now;
+
     // Common state updates
     setIsListening(false);
     setIsTranscribing(false);
 
     // Treat 'no-speech' as a benign end-of-input signal
     if (isNoSpeech) {
+      // If shouldAutoRestart is false, user explicitly stopped - don't restart
+      if (!shouldAutoRestartOnEndRef.current) {
+        if (pendingFinalizeTimerRef.current) {
+          clearTimeout(pendingFinalizeTimerRef.current);
+          pendingFinalizeTimerRef.current = null;
+        }
+
+        // CRITICAL: Commit any available text before stopping
+        const accumulated = (accumulatedTextRef.current || '').trim();
+        const spoken = accumulated || (transcriptRef.current || '').trim();
+
+        if (pendingFinalResultRef.current) {
+          const toCommit = pendingFinalResultRef.current;
+          setFinalText(toCommit.text);
+          setCurrentText(toCommit.text);
+          setConfidence(toCommit.confidence);
+          pendingFinalResultRef.current = null;
+        } else if (spoken) {
+          setFinalText(spoken);
+          setCurrentText(spoken);
+          setConfidence(0.8);
+        }
+
+        setIsListening(false);
+        setIsTranscribing(false);
+        return;
+      }
+
       // If we are within a grace period, try to keep listening until the timer decides
       if (pendingFinalizeTimerRef.current) {
         if (shouldAutoRestartOnEndRef.current && lastOptionsRef.current && !startingRecognitionRef.current) {
           try {
             startingRecognitionRef.current = true;
             ExpoSpeechRecognitionModule.start(lastOptionsRef.current as any);
-            setIsListening(true);
+            // NOTE: We do NOT set setIsListening(true) here.
+            // We keep the microphone open in the background, but the UI stays "not listening"
+            // until actual interim results are received.
           } catch (e) {
             console.log('Auto-restart after no-speech failed', e);
           } finally {
@@ -250,10 +345,24 @@ export function useNativeSpeechRecognition(): UseNativeSpeechRecognitionReturn {
       return;
     }
 
+    // For non-benign errors, cancel any grace/pending commits.
+    if (pendingFinalizeTimerRef.current) {
+      clearTimeout(pendingFinalizeTimerRef.current);
+      pendingFinalizeTimerRef.current = null;
+    }
+    pendingFinalResultRef.current = null;
+
+    // Best-effort stop to ensure the native recognizer isn't left in a running state.
+    try {
+      ExpoSpeechRecognitionModule.stop();
+    } catch {
+      // ignore
+    }
+
     // Handle other errors gracefully like in the original implementation
     const isPermissionError = errorMessage.toLowerCase().includes('permission') ||
-                             errorMessage.toLowerCase().includes('microphone') ||
-                             errorMessage.toLowerCase().includes('speech recognition');
+      errorMessage.toLowerCase().includes('microphone') ||
+      errorMessage.toLowerCase().includes('speech recognition');
 
     if (isPermissionError) {
       const handled = await handleSpeechRecognitionError(new Error(errorMessage));
@@ -296,8 +405,8 @@ export function useNativeSpeechRecognition(): UseNativeSpeechRecognitionReturn {
 
       // Handle permission errors gracefully
       const isPermissionError = error.message.toLowerCase().includes('permission') ||
-                               error.message.toLowerCase().includes('microphone') ||
-                               error.message.toLowerCase().includes('speech recognition');
+        error.message.toLowerCase().includes('microphone') ||
+        error.message.toLowerCase().includes('speech recognition');
 
       if (isPermissionError) {
         const handled = await handleSpeechRecognitionError(error);
@@ -319,18 +428,39 @@ export function useNativeSpeechRecognition(): UseNativeSpeechRecognitionReturn {
 
   const stopListening = useCallback(() => {
     try {
+      // CRITICAL: Set this FIRST to prevent auto-restart race condition
+      // This must be set before calling stop() to ensure the 'end' event handler doesn't auto-restart
+      shouldAutoRestartOnEndRef.current = false;
+
       setError(null);
       if (pendingFinalizeTimerRef.current) {
         clearTimeout(pendingFinalizeTimerRef.current);
         pendingFinalizeTimerRef.current = null;
-        pendingFinalResultRef.current = null;
-        shouldAutoRestartOnEndRef.current = false;
       }
+
+      // CRITICAL: Commit any available text before stopping
+      const accumulated = (accumulatedTextRef.current || '').trim();
+      const spoken = accumulated || (transcriptRef.current || '').trim();
+
+      if (pendingFinalResultRef.current) {
+        const toCommit = pendingFinalResultRef.current;
+        setFinalText(toCommit.text);
+        setCurrentText(toCommit.text);
+        setConfidence(toCommit.confidence);
+        pendingFinalResultRef.current = null;
+      } else if (spoken) {
+        setFinalText(spoken);
+        setCurrentText(spoken);
+        setConfidence(0.8);
+      }
+
+      // Clear refs BEFORE stopping to prevent 'end' event from processing them again
+      accumulatedTextRef.current = '';
+      transcriptRef.current = '';
+
       // Use direct module call like Ai-Tutor
       ExpoSpeechRecognitionModule.stop();
       setIsListening(false);
-      accumulatedTextRef.current = '';
-      transcriptRef.current = '';
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to stop speech recognition';
       setError(errorMessage);

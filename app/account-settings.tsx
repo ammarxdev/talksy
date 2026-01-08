@@ -105,7 +105,13 @@ export default function AccountSettingsScreen() {
       />
       <View style={styles.profileInfo}>
         <ThemedText style={[styles.profileName, { color: colors.textPrimary }]}>
-          {profile?.full_name || profile?.username || user?.email?.split('@')[0] || 'User'}
+          {(() => {
+            // Never use email local-part as the displayed "name".
+            // Prefer username (what user sets), then full_name, otherwise a generic fallback.
+            if (profile?.username) return profile.username;
+            if (profile?.full_name) return profile.full_name;
+            return 'User';
+          })()}
         </ThemedText>
         <ThemedText style={[styles.profileEmail, { color: colors.textSecondary }]}>
           {user?.email || 'No email'}
@@ -154,10 +160,12 @@ export default function AccountSettingsScreen() {
         <SettingsSection title="Security">
           <SettingsItem
             icon="key.fill"
-            title="Reset Password"
-            subtitle="Change your account password"
+            title="Change Password"
+            subtitle="Set a new password"
             onPress={() => {
-              router.push('/reset-password');
+              // If the user is signed in, allow changing password directly in-app.
+              // If not, fall back to email reset.
+              router.push(user ? '/reset-password-complete' : '/reset-password');
             }}
           />
         </SettingsSection>

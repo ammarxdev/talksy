@@ -28,16 +28,12 @@ export function useAIResponse(): UseAIResponseReturn {
         throw new Error('AI service is not properly configured. Please check your Gemini API key.');
       }
 
-      console.log('Generating AI response for:', message);
-      
       // Generate the response
       const response = await aiResponseService.generateResponse(message);
-      
+
       setLastResponse(response);
       setConversationHistory(aiResponseService.getHistory());
-      
-      console.log('AI response generated:', response.text);
-      
+
       return response;
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to generate AI response';

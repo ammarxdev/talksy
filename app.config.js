@@ -15,6 +15,7 @@ export default {
     newArchEnabled: true,
     ios: {
       supportsTablet: true,
+      bundleIdentifier: "com.bytebrewtechnologies.voiceassistent",
       infoPlist: {
         NSMicrophoneUsageDescription: "This app uses the microphone for voice recognition and real-time audio level monitoring to provide a seamless voice assistant experience.",
         NSSpeechRecognitionUsageDescription: "This app uses speech recognition to convert your voice into text for the voice assistant functionality.",
@@ -188,7 +189,6 @@ export default {
     },
     extra: {
       ASSEMBLYAI_API_KEY: process.env.ASSEMBLYAI_API_KEY,
-      GEMINI_API_KEY: process.env.GEMINI_API_KEY,
       OPENWEATHER_API_KEY: process.env.OPENWEATHER_API_KEY,
       EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
       EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,

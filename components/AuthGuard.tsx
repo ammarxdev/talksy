@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
-import { router } from 'expo-router';
+import { router, useSegments } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 
 interface AuthGuardProps {
@@ -14,24 +14,30 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
   requireAuth = true
 }) => {
   const { user, loading, isPasswordResetFlow } = useAuth();
+  const segments = useSegments();
 
   useEffect(() => {
     if (!loading) {
-      // Special handling for password reset flow
+      // Special handling for password reset flow: force user into the completion screen
+      // so we don't get stuck showing intermediary screens.
       if (isPasswordResetFlow && user) {
-        // User is authenticated via password reset, allow access to reset completion screen
+        const segmentList = (segments as unknown as string[]) ?? [];
+        const isOnResetComplete = segmentList.includes('reset-password-complete');
+        if (!isOnResetComplete) {
+          router.replace('/reset-password-complete' as any);
+        }
         return;
       }
 
       if (requireAuth && !user) {
         // User is not authenticated, redirect to auth screen
         router.replace('/auth');
-      } else if (!requireAuth && user && !isPasswordResetFlow) {
+      } else if (!requireAuth && user) {
         // User is authenticated but on auth screen, redirect to main app (unless in password reset flow)
         router.replace('/(tabs)');
       }
     }
-  }, [user, loading, requireAuth, isPasswordResetFlow]);
+  }, [user, loading, requireAuth, isPasswordResetFlow, segments]);
 
   // Show loading screen while checking authentication
   if (loading) {
@@ -58,13 +64,14 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
   }
 
   if (!requireAuth && user) {
-    // This should not happen due to redirect, but just in case
+    // While redirecting, show a lightweight loader instead of a static
+    // "Redirecting to app..." state that can appear stuck.
     return (
-      <View style={[styles.container, { backgroundColor: '#f8fafc' }]}>
-        <View style={styles.messageContainer}>
-          <Text style={[styles.messageText, { color: '#0f172a' }]}>Redirecting to app...</Text>
+      <LinearGradient colors={['#667eea', '#764ba2']} style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="white" />
         </View>
-      </View>
+      </LinearGradient>
     );
   }
 

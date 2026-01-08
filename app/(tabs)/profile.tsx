@@ -187,7 +187,7 @@ export default function ProfileScreen() {
           <ThemedText style={[styles.userName, { color: colors.textPrimary }]}>
             {profileLoading
               ? 'Loading...'
-              : (profile?.full_name || profile?.username || user?.email?.split('@')[0] || 'User')
+              : (profile?.username || 'User')
             }
           </ThemedText>
           <ThemedText style={[styles.userEmail, { color: colors.textSecondary }]}>

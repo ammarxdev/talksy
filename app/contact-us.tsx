@@ -152,7 +152,7 @@ export default function ContactUsScreen() {
         }, 2000);
       } else {
         showError(
-          result.error || 'Failed to send email. Please try again or contact us directly at hur3561@gmail.com',
+          result.error || 'Failed to send email. Please try again or contact us directly at moin.iyan@gmail.com',
           'Send Failed'
         );
       }

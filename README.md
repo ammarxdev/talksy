@@ -27,7 +27,7 @@ User Speech → Expo Speech Recognition (STT) → Gemini AI → Expo Speech (TTS
 
 - Node.js (v16 or higher)
 - Expo CLI (`npm install -g @expo/cli`)
-- Gemini AI API Key
+- Gemini AI API Key (stored in Supabase; not in the app)
 - Supabase Account (for authentication)
 - Device with speech recognition support (Android 13+ or iOS 17+ recommended)
 
@@ -46,9 +46,6 @@ User Speech → Expo Speech Recognition (STT) → Gemini AI → Expo Speech (TTS
    # AssemblyAI API Key (Get from: https://www.assemblyai.com/)
    ASSEMBLYAI_API_KEY=your_assemblyai_api_key_here
 
-   # Gemini AI API Key (Get from: https://makersuite.google.com/app/apikey)
-   GEMINI_API_KEY=your_gemini_api_key_here
-
    # OpenWeatherMap API Key (Get from: https://openweathermap.org/api)
    OPENWEATHER_API_KEY=your_openweather_api_key_here
 
@@ -57,7 +54,13 @@ User Speech → Expo Speech Recognition (STT) → Gemini AI → Expo Speech (TTS
    EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
    ```
 
-3. **Start the app**
+3. **Configure Gemini via Supabase (recommended)**
+
+   This app calls a Supabase Edge Function (`gemini-proxy`) which fetches the Gemini API key + model from a Supabase table at request time.
+
+   Setup guide: docs/GEMINI_SUPABASE_MANAGED_CONFIG.md
+
+4. **Start the app**
 
    ```bash
    npx expo start

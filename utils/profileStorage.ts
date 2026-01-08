@@ -6,6 +6,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as Network from 'expo-network';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 import { supabase } from '@/config/supabase';
 import {
@@ -48,6 +49,50 @@ const DEFAULT_RETRY_CONFIG: RetryConfig = {
   maxDelay: 10000, // 10 seconds
   backoffMultiplier: 2
 };
+
+/**
+ * Decode Base64 string to ArrayBuffer safely without atob
+ */
+function decodeBase64ToArrayBuffer(base64: string): ArrayBuffer {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  const padding = '=';
+  let mainLength = base64.length;
+  if (base64.endsWith('==')) mainLength -= 2;
+  else if (base64.endsWith('=')) mainLength -= 1;
+
+  const byteLength = Math.floor((mainLength * 3) / 4);
+  const bytes = new Uint8Array(byteLength);
+
+  let chunk;
+  let byteIndex = 0;
+  let charIndex = 0;
+
+  // Use local lookup for performance
+  const lookup = new Uint8Array(256);
+  for (let i = 0; i < characters.length; i++) {
+    lookup[characters.charCodeAt(i)] = i;
+  }
+
+  // Handle simplified base64 (replace - with + and _ with /)
+  const cleanBase64 = base64.replace(/-/g, '+').replace(/_/g, '/');
+
+  for (; charIndex < base64.length; charIndex += 4) {
+    chunk =
+      (lookup[cleanBase64.charCodeAt(charIndex)] << 18) |
+      (lookup[cleanBase64.charCodeAt(charIndex + 1)] << 12) |
+      (lookup[cleanBase64.charCodeAt(charIndex + 2)] << 6) |
+      lookup[cleanBase64.charCodeAt(charIndex + 3)];
+
+    bytes[byteIndex++] = (chunk & 16711680) >> 16;
+    if (byteIndex < byteLength) {
+      bytes[byteIndex++] = (chunk & 65280) >> 8;
+    }
+    if (byteIndex < byteLength) {
+      bytes[byteIndex++] = chunk & 255;
+    }
+  }
+  return bytes.buffer;
+}
 
 /**
  * Check if an error is retryable (network-related)
@@ -260,7 +305,7 @@ class ProfileStorageService {
   private cache: Map<string, ProfileCache> = new Map();
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
-  private constructor() {}
+  private constructor() { }
 
   public static getInstance(): ProfileStorageService {
     if (!ProfileStorageService.instance) {
@@ -307,18 +352,18 @@ class ProfileStorageService {
       }
 
       const profile = data as Profile;
-      
+
       // Cache the profile
       await this.cacheProfile(profile);
-      
+
       return profile;
     } catch (error) {
       console.error('Failed to load profile:', error);
-      
+
       if (error instanceof ProfileError) {
         throw error;
       }
-      
+
       throw new ProfileError(
         'Failed to load profile',
         PROFILE_ERROR_CODES.NETWORK_ERROR,
@@ -353,15 +398,15 @@ class ProfileStorageService {
 
       // Update cache
       await this.cacheProfile(profile);
-      
+
       console.log('Profile saved successfully');
     } catch (error) {
       console.error('Failed to save profile:', error);
-      
+
       if (error instanceof ProfileError) {
         throw error;
       }
-      
+
       throw new ProfileError(
         'Failed to save profile',
         PROFILE_ERROR_CODES.STORAGE_ERROR,
@@ -394,17 +439,46 @@ class ProfileStorageService {
         updated_at: new Date().toISOString(),
       };
 
-      // Save updated profile
-      await this.saveProfile(updatedProfile);
-      
-      return updatedProfile;
+      // Persist update without UPSERT to avoid requiring INSERT RLS policies.
+      // (INSERT ... ON CONFLICT still evaluates INSERT policies under RLS.)
+      if (!supabase) {
+        throw new ProfileError(
+          'Profile storage is not configured. Please set up Supabase.',
+          PROFILE_ERROR_CODES.STORAGE_ERROR
+        );
+      }
+      const client = supabase;
+      const { data, error } = await client
+        .from('profiles')
+        .update({
+          ...updates,
+          updated_at: updatedProfile.updated_at,
+        })
+        .eq('id', userId)
+        .select('*')
+        .single();
+
+      if (error) {
+        throw new ProfileError(
+          `Failed to update profile: ${error.message}`,
+          PROFILE_ERROR_CODES.UPDATE_FAILED,
+          error
+        );
+      }
+
+      const persistedProfile = data ? ({ ...currentProfile, ...data } as Profile) : updatedProfile;
+
+      // Update cache
+      await this.cacheProfile(persistedProfile);
+
+      return persistedProfile;
     } catch (error) {
       console.error('Failed to update profile:', error);
-      
+
       if (error instanceof ProfileError) {
         throw error;
       }
-      
+
       throw new ProfileError(
         'Failed to update profile',
         PROFILE_ERROR_CODES.UPDATE_FAILED,
@@ -512,49 +586,184 @@ class ProfileStorageService {
           let uploadData;
           let uploadError;
 
-          // Platform-specific upload approach
-          if (Platform.OS === 'android') {
-            // On Android, use URI directly (avoids blob conversion issues)
-            profileLogger.debug(LogCategory.UPLOAD, 'Using direct URI upload for Android');
+          // Unified upload approach using ArrayBuffer (Gold Standard for React Native)
+          // We read as Base64 and convert to ArrayBuffer to avoid Blobs and FormData issues
+          profileLogger.debug(LogCategory.UPLOAD, 'Reading file as Base64 for ArrayBuffer conversion', {
+            uri: avatar.uri?.substring(0, 100),
+            size: avatar.size,
+            type: avatar.type
+          });
 
-            const { data, error } = await client.storage
-              .from('avatars')
-              .upload(fileName, {
-                uri: avatar.uri,
-                name: fileName,
-                type: avatar.type,
-              } as any, {
-                contentType: avatar.type,
-                upsert: true,
-              });
-
-            uploadData = data;
-            uploadError = error;
-          } else {
-            // On other platforms, convert to blob first
-            profileLogger.debug(LogCategory.UPLOAD, 'Using blob conversion for non-Android platforms');
-
-            const blob = await convertUriToBlob(avatar.uri, avatar.type);
-            const { data, error } = await client.storage
-              .from('avatars')
-              .upload(fileName, blob, {
-                contentType: avatar.type,
-                upsert: true,
-              });
-
-            uploadData = data;
-            uploadError = error;
+          let base64: string;
+          try {
+            base64 = await FileSystem.readAsStringAsync(avatar.uri, {
+              encoding: FileSystem.EncodingType.Base64,
+            });
+            profileLogger.debug(LogCategory.UPLOAD, 'Successfully read file as Base64', {
+              base64Length: base64.length
+            });
+          } catch (readError: any) {
+            profileLogger.error(LogCategory.UPLOAD, 'Failed to read file as Base64', {
+              error: readError.message,
+              code: readError.code,
+              uri: avatar.uri?.substring(0, 100)
+            });
+            throw new ProfileError(
+              `Failed to read image file: ${readError.message}`,
+              PROFILE_ERROR_CODES.UPLOAD_ERROR,
+              readError
+            );
           }
 
+          // Convert Base64 to ArrayBuffer manually since we don't have base64-arraybuffer
+          let arrayBuffer: ArrayBuffer;
+          try {
+            arrayBuffer = decodeBase64ToArrayBuffer(base64);
+            profileLogger.debug(LogCategory.UPLOAD, 'Successfully converted Base64 to ArrayBuffer', {
+              byteLength: arrayBuffer.byteLength
+            });
+          } catch (conversionError: any) {
+            profileLogger.error(LogCategory.UPLOAD, 'Failed to convert Base64 to ArrayBuffer', {
+              error: conversionError.message,
+              base64Length: base64.length
+            });
+            throw new ProfileError(
+              `Failed to process image: ${conversionError.message}`,
+              PROFILE_ERROR_CODES.UPLOAD_ERROR,
+              conversionError
+            );
+          }
+
+          profileLogger.debug(LogCategory.UPLOAD, 'Uploading to storage', {
+            byteLength: arrayBuffer.byteLength,
+            fileName,
+            contentType: avatar.type
+          });
+
+          // Try uploading with Uint8Array first, fallback to FormData if it fails
+          let data;
+          let error;
+          
+          // Convert ArrayBuffer to Uint8Array for upload
+          const uint8Array = new Uint8Array(arrayBuffer);
+          
+          // Log auth state before upload
+          const { data: { session } } = await client.auth.getSession();
+          profileLogger.debug(LogCategory.UPLOAD, 'Auth state before upload', {
+            hasSession: !!session,
+            userId: session?.user?.id,
+            fileNameUserId: fileName.split('/')[0],
+            userIdMatch: session?.user?.id === fileName.split('/')[0]
+          });
+
+          // First attempt: Use Uint8Array (works for most cases)
+          const uploadResult = await client.storage
+            .from('avatars')
+            .upload(fileName, uint8Array, {
+              contentType: avatar.type,
+              upsert: true,
+            });
+          
+          data = uploadResult.data;
+          error = uploadResult.error;
+          
+          // If Uint8Array upload fails, try FormData approach as fallback
+          if (error) {
+            profileLogger.warn(LogCategory.UPLOAD, 'Uint8Array upload failed, trying FormData fallback', {
+              error: error.message
+            });
+            
+            // Create FormData with the file
+            const formData = new FormData();
+            formData.append('file', {
+              uri: avatar.uri,
+              name: fileName.split('/').pop() || 'avatar.png',
+              type: avatar.type,
+            } as any);
+            
+            // Try with FormData - this requires using fetch directly
+            try {
+              const session = await client.auth.getSession();
+              const accessToken = session.data?.session?.access_token;
+              
+              if (!accessToken) {
+                throw new Error('No authentication token available');
+              }
+              
+              // Get Supabase URL from environment or Constants
+              const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 
+                (Constants.expoConfig?.extra as any)?.EXPO_PUBLIC_SUPABASE_URL || '';
+              
+              if (!supabaseUrl) {
+                throw new Error('Supabase URL not configured');
+              }
+              
+              const uploadUrl = `${supabaseUrl}/storage/v1/object/avatars/${fileName}`;
+              
+              profileLogger.debug(LogCategory.UPLOAD, 'Attempting FormData upload', {
+                uploadUrl: uploadUrl.substring(0, 80) + '...',
+                hasAccessToken: !!accessToken
+              });
+              
+              const response = await fetch(uploadUrl, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                  'x-upsert': 'true',
+                },
+                body: formData,
+              });
+              
+              if (response.ok) {
+                const responseData = await response.json();
+                data = { path: fileName, ...responseData };
+                error = null;
+                profileLogger.info(LogCategory.UPLOAD, 'FormData fallback upload successful');
+              } else {
+                const errorText = await response.text();
+                profileLogger.error(LogCategory.UPLOAD, 'FormData fallback upload failed', {
+                  status: response.status,
+                  statusText: response.statusText,
+                  error: errorText
+                });
+              }
+            } catch (formDataError: any) {
+              profileLogger.error(LogCategory.UPLOAD, 'FormData fallback failed', {
+                error: formDataError.message
+              });
+              // Keep the original error if FormData also fails
+            }
+          }
+
+          uploadData = data;
+          uploadError = error;
+
           if (uploadError) {
+            // Log the original Supabase error for debugging
+            profileLogger.error(LogCategory.UPLOAD, 'Supabase storage upload error details', {
+              message: uploadError.message,
+              name: uploadError.name,
+              status: (uploadError as any).status,
+              statusCode: (uploadError as any).statusCode,
+              error: (uploadError as any).error,
+              cause: (uploadError as any).cause,
+              fullError: JSON.stringify(uploadError, Object.getOwnPropertyNames(uploadError))
+            });
+
             // Provide more specific error messages based on error type
-            let userMessage = 'Failed to upload avatar. Please try again.';
-            if (uploadError.message.includes('size')) {
+            const errorMsg = uploadError.message?.toLowerCase() || '';
+            let userMessage = `Failed to upload avatar: ${uploadError.message}`;
+            
+            if (errorMsg.includes('size') || errorMsg.includes('payload too large')) {
               userMessage = 'The image file is too large. Please compress it and try again.';
-            } else if (uploadError.message.includes('type') || uploadError.message.includes('format')) {
+            } else if (errorMsg.includes('type') || errorMsg.includes('format') || errorMsg.includes('mime')) {
               userMessage = 'The image format is not supported. Please use a JPEG, PNG, WebP, or GIF image.';
-            } else if (uploadError.message.includes('network') || uploadError.message.includes('connection')) {
+            } else if (errorMsg.includes('network') || errorMsg.includes('connection') || errorMsg.includes('fetch')) {
               userMessage = 'Network error. Please check your connection and try again.';
+            } else if (errorMsg.includes('unauthorized') || errorMsg.includes('not authorized') || errorMsg.includes('403')) {
+              userMessage = 'Not authorized to upload. Please log in again and try.';
+            } else if (errorMsg.includes('bucket') || errorMsg.includes('not found')) {
+              userMessage = 'Storage bucket not configured. Please contact support.';
             }
 
             throw new ProfileError(
@@ -632,7 +841,9 @@ class ProfileStorageService {
     } catch (error) {
       const errorMessage = error instanceof ProfileError
         ? error.message
-        : 'Failed to upload avatar';
+        : error instanceof Error
+          ? error.message
+          : 'Failed to upload avatar';
 
       const result = {
         success: false,
@@ -659,7 +870,8 @@ class ProfileStorageService {
         stack: error instanceof Error ? error.stack : undefined,
         fileSize: avatar.size,
         mimeType: avatar.type,
-        fileName: avatar.name
+        fileName: avatar.name,
+        originalError: error // Log the raw error object
       });
 
       endPerformanceTracking(operationId, {
@@ -740,7 +952,7 @@ class ProfileStorageService {
       // Check AsyncStorage cache
       const cacheKey = `${PROFILE_STORAGE_KEYS.PROFILE_CACHE}_${userId}`;
       const cachedData = await AsyncStorage.getItem(cacheKey);
-      
+
       if (cachedData) {
         const cache: ProfileCache = JSON.parse(cachedData);
         if (this.isCacheValid(cache.timestamp)) {
@@ -792,13 +1004,13 @@ class ProfileStorageService {
   private validateProfileUpdates(updates: ProfileUpdate): void {
     if (updates.username !== undefined && updates.username !== null) {
       if (updates.username.length < PROFILE_VALIDATION.USERNAME.MIN_LENGTH ||
-          updates.username.length > PROFILE_VALIDATION.USERNAME.MAX_LENGTH) {
+        updates.username.length > PROFILE_VALIDATION.USERNAME.MAX_LENGTH) {
         throw new ProfileError(
           `Username must be ${PROFILE_VALIDATION.USERNAME.MIN_LENGTH}-${PROFILE_VALIDATION.USERNAME.MAX_LENGTH} characters`,
           PROFILE_ERROR_CODES.VALIDATION_ERROR
         );
       }
-      
+
       if (!PROFILE_VALIDATION.USERNAME.PATTERN.test(updates.username)) {
         throw new ProfileError(
           'Username can only contain letters, numbers, underscores, and hyphens',
@@ -943,7 +1155,7 @@ class ProfileStorageService {
         const profileKeys = keys.filter(key => key.startsWith(PROFILE_STORAGE_KEYS.PROFILE_CACHE));
         await AsyncStorage.multiRemove(profileKeys);
       }
-      
+
       console.log('Profile cache cleared');
     } catch (error) {
       console.error('Failed to clear profile cache:', error);
@@ -967,17 +1179,17 @@ class ProfileStorageService {
 export const profileStorage = ProfileStorageService.getInstance();
 
 // Convenience functions for direct use
-export const loadProfile = (userId: string, forceRefresh?: boolean) => 
+export const loadProfile = (userId: string, forceRefresh?: boolean) =>
   profileStorage.loadProfile(userId, forceRefresh);
 
-export const updateProfile = (userId: string, updates: ProfileUpdate) => 
+export const updateProfile = (userId: string, updates: ProfileUpdate) =>
   profileStorage.updateProfile(userId, updates);
 
-export const uploadAvatar = (userId: string, avatar: AvatarUpload) => 
+export const uploadAvatar = (userId: string, avatar: AvatarUpload) =>
   profileStorage.uploadAvatar(userId, avatar);
 
-export const deleteAvatar = (userId: string) => 
+export const deleteAvatar = (userId: string) =>
   profileStorage.deleteAvatar(userId);
 
-export const clearProfileCache = (userId?: string) => 
+export const clearProfileCache = (userId?: string) =>
   profileStorage.clearCache(userId);
