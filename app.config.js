@@ -18,7 +18,7 @@ export default {
       bundleIdentifier: "com.bytebrewtechnologies.voiceassistent",
       infoPlist: {
         NSMicrophoneUsageDescription: "This app uses the microphone for voice recognition and real-time audio level monitoring to provide a seamless voice assistant experience.",
-        NSSpeechRecognitionUsageDescription: "This app uses speech recognition to convert your voice into text for the voice assistant functionality.",
+
         NSContactsUsageDescription: "This app accesses your contacts to help you make calls through voice commands.",
         NSUserTrackingUsageDescription: "This identifier will be used to deliver personalized ads to you and improve your app experience."
       }
@@ -103,16 +103,7 @@ export default {
           microphonePermission: "The app accesses your microphone for video recording (if needed)."
         }
       ],
-      [
-        "expo-speech-recognition",
-        {
-          microphonePermission: "Allow $(PRODUCT_NAME) to use the microphone.",
-          speechRecognitionPermission: "Allow $(PRODUCT_NAME) to use speech recognition.",
-          androidSpeechServicePackages: [
-            "com.google.android.googlequicksearchbox"
-          ]
-        }
-      ],
+
       [
         "expo-contacts",
         {

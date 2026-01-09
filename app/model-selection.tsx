@@ -25,15 +25,19 @@ import { ModelCard } from '@/components/model/ModelCard';
 import { ModelPreviewModal } from '@/components/model/ModelPreviewModal';
 import { AVAILABLE_MODELS } from '@/types/models';
 
+import { useVoiceAssistantContext } from '@/components/VoiceAssistantProviderWrapper';
+
 export default function ModelSelectionScreen() {
   const { colors, colorScheme } = useTheme();
   const { selectedModel, setSelectedModel, isLoading: modelLoading, error } = useModel();
   const { showSuccess, showError } = useAlert();
-  
+  const { startConversation, assistantState } = useVoiceAssistantContext();
+
   // Local state
   const [refreshing, setRefreshing] = useState(false);
   const [previewModelId, setPreviewModelId] = useState<string | null>(null);
   const [isChangingModel, setIsChangingModel] = useState(false);
+  const [isStartingCall, setIsStartingCall] = useState(false);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -56,34 +60,48 @@ export default function ModelSelectionScreen() {
     ]).start();
   }, []);
 
-  // Handle model selection
+  // Handle model selection - now starts realtime call immediately
   const handleModelSelect = async (modelId: string) => {
-    if (modelId === selectedModel || isChangingModel) {
+    // Prevent selection if already changing model or call is active
+    if (isChangingModel || isStartingCall || assistantState !== 'idle') {
+      console.log('Model selection blocked - state:', { isChangingModel, isStartingCall, assistantState });
       return;
     }
 
     try {
       setIsChangingModel(true);
-      
+      setIsStartingCall(true);
+
+      // First, update the selected model
       const success = await setSelectedModel(modelId as any);
-      
+
       if (success) {
+        // Show success message
         showSuccess(
-          'Your voice assistant model has been updated successfully!',
-          'Model Updated',
-          [
-            {
-              text: 'Continue',
-              style: 'default',
-              onPress: () => {
-                // Small delay to let user see the success message
-                setTimeout(() => {
-                  router.back();
-                }, 500);
-              }
-            }
-          ]
+          'Model selected! Starting realtime call...',
+          'Model Updated'
         );
+
+        // Start realtime call with Grok
+        try {
+          await startConversation();
+
+          // Navigate back after call starts
+          setTimeout(() => {
+            router.back();
+          }, 300);
+        } catch (callError) {
+          console.error('Failed to start realtime call:', callError);
+          showError(
+            'Model updated but failed to start realtime call. Please try again from the main screen.',
+            'Call Start Failed'
+          );
+
+          // Still navigate back
+          setTimeout(() => {
+            router.back();
+          }, 500);
+        }
       } else {
         showError(
           'Failed to update your model selection. Please try again.',
@@ -98,6 +116,7 @@ export default function ModelSelectionScreen() {
       );
     } finally {
       setIsChangingModel(false);
+      setIsStartingCall(false);
     }
   };
 
@@ -138,7 +157,7 @@ export default function ModelSelectionScreen() {
       edges={['left', 'right', 'bottom']}
     >
       <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
-      
+
       {/* Stack Screen Options */}
       <Stack.Screen
         options={{
@@ -174,7 +193,7 @@ export default function ModelSelectionScreen() {
             Choose Your Voice Assistant
           </ThemedText>
           <ThemedText style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Select the model that best represents your personal assistant. 
+            Select the model that best represents your personal assistant.
             You can change this anytime in your profile settings.
           </ThemedText>
         </ThemedView>
@@ -234,7 +253,7 @@ export default function ModelSelectionScreen() {
           <View style={[styles.helpContainer, { backgroundColor: colors.surfaceVariant }]}>
             <IconSymbol name="lightbulb" size={20} color={colors.accent} />
             <ThemedText style={[styles.helpText, { color: colors.textSecondary }]}>
-              Tap on any model to select it, or use the preview button to see it in full size. 
+              Tap on any model to select it, or use the preview button to see it in full size.
               Your selection will be saved automatically.
             </ThemedText>
           </View>

@@ -10,14 +10,6 @@ export const API_CONFIG = {
     TRANSCRIPT_URL: 'https://api.assemblyai.com/v2/transcript',
   },
 
-  // Gemini AI Configuration
-  GEMINI: {
-    // NOTE: Gemini API key is now expected to be stored server-side in Supabase (see docs).
-    // This value is kept only for backward compatibility and should not be relied on in the client.
-    API_KEY: Constants.expoConfig?.extra?.GEMINI_API_KEY || 'your_gemini_api_key_here',
-    BASE_URL: 'https://generativelanguage.googleapis.com/v1beta',
-    MODEL: 'gemini-2.5-flash-lite',
-  },
 
   // OpenWeatherMap Configuration
   WEATHER: {
@@ -25,7 +17,24 @@ export const API_CONFIG = {
     BASE_URL: 'https://api.openweathermap.org/data/2.5',
     GEOCODING_URL: 'https://api.openweathermap.org/geo/1.0',
   },
-  
+
+  // Grok Realtime Configuration
+  GROK: {
+    // Use Supabase Edge Function for session creation (no localhost needed)
+    get SESSION_URL(): string {
+      const supabaseUrl = Constants.expoConfig?.extra?.EXPO_PUBLIC_SUPABASE_URL ||
+        process.env.EXPO_PUBLIC_SUPABASE_URL ||
+        'https://tqkygmcsiillcrswdaja.supabase.co';
+      return `${supabaseUrl}/functions/v1/realtime-session`;
+    },
+    EXTERNAL_API_URL: 'wss://api.x.ai/v1/realtime',
+    MODEL: 'grok-2-audio', // Model for voice agent
+  } as {
+    readonly SESSION_URL: string;
+    EXTERNAL_API_URL: string;
+    MODEL: string;
+  },
+
   // Audio Configuration
   AUDIO: {
     RECORDING_OPTIONS: {
@@ -54,13 +63,15 @@ export const validateApiKeys = () => {
   const errors: string[] = [];
 
   if (!API_CONFIG.ASSEMBLYAI.API_KEY ||
-      API_CONFIG.ASSEMBLYAI.API_KEY === 'your_actual_assemblyai_api_key_here' ||
-      API_CONFIG.ASSEMBLYAI.API_KEY === 'your_assemblyai_api_key_here') {
+    API_CONFIG.ASSEMBLYAI.API_KEY === 'your_actual_assemblyai_api_key_here' ||
+    API_CONFIG.ASSEMBLYAI.API_KEY === 'your_assemblyai_api_key_here') {
     errors.push('ASSEMBLYAI_API_KEY is not configured. Please get your API key from https://www.assemblyai.com/ and set it in .env file');
   }
 
-  // Gemini credentials are managed via Supabase Edge Function (gemini-proxy).
-  // No client-side GEMINI_API_KEY validation here.
+  // CRITICAL: Grok/xAI API keys are managed via Supabase Edge Functions.
+  // API keys are loaded ONLY from server-side .env (Supabase secrets).
+  // NEVER fetch, store, or read API keys from Supabase database.
+  // No client-side API key validation here.
 
   if (!API_CONFIG.WEATHER.API_KEY || API_CONFIG.WEATHER.API_KEY === 'your_openweather_api_key_here') {
     errors.push('OPENWEATHER_API_KEY is not configured. Please get your API key from https://openweathermap.org/api and set it in .env file');

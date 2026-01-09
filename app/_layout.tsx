@@ -19,6 +19,7 @@ import { ModelProvider } from '@/contexts/ModelContext';
 import { PermissionProvider } from '@/contexts/PermissionContext';
 import { AdMobInitializer } from '@/components/AdMobInitializer';
 import { ConsentInitializer } from '@/components/privacy/ConsentInitializer';
+import { VoiceAssistantProvider } from '@/components/VoiceAssistantProviderWrapper';
 import { useTheme, useStatusBarStyle } from '@/hooks/useTheme';
 import { appStateInterstitialManager } from '@/utils/appStateInterstitialManager';
 import { resilientAdManager } from '@/services/ResilientAdManager';
@@ -90,15 +91,17 @@ export default function RootLayout() {
             <AlertProvider>
               <PermissionProvider>
                 <NotificationProvider>
-                  <ConsentInitializer
-                    onConsentComplete={(canRequestAds) => {
-                      console.log(`🔐 Consent initialization complete. Can request ads: ${canRequestAds}`);
-                    }}
-                  >
-                    <AdMobInitializer>
-                      <AppLayout />
-                    </AdMobInitializer>
-                  </ConsentInitializer>
+                  <VoiceAssistantProvider>
+                    <ConsentInitializer
+                      onConsentComplete={(canRequestAds) => {
+                        console.log(`🔐 Consent initialization complete. Can request ads: ${canRequestAds}`);
+                      }}
+                    >
+                      <AdMobInitializer>
+                        <AppLayout />
+                      </AdMobInitializer>
+                    </ConsentInitializer>
+                  </VoiceAssistantProvider>
                 </NotificationProvider>
               </PermissionProvider>
             </AlertProvider>

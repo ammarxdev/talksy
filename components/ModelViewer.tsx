@@ -231,6 +231,8 @@ function AvatarImage({ uri, width, height }: { uri: string; width: number; heigh
 
 interface ModelViewerProps {
   onPress?: () => void;
+  onPressIn?: () => void;
+  onPressOut?: () => void;
   size?: number;
   width?: number;
   height?: number;
@@ -244,6 +246,8 @@ interface ModelViewerProps {
 
 export default function ModelViewer({
   onPress,
+  onPressIn,
+  onPressOut,
   size = 200,
   width,
   height,
@@ -370,6 +374,8 @@ export default function ModelViewer({
       {imageUri && !isLoading && !modelContextLoading && !loadError ? (
         <TouchableOpacity
           onPress={onPress}
+          onPressIn={onPressIn}
+          onPressOut={onPressOut}
           activeOpacity={0.8}
           style={{
             flex: 1,

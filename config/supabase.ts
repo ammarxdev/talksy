@@ -9,6 +9,9 @@ import * as WebBrowser from 'expo-web-browser';
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || (Constants.expoConfig?.extra as any)?.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || (Constants.expoConfig?.extra as any)?.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
+export const getSupabaseUrl = () => supabaseUrl;
+export const getSupabaseAnonKey = () => supabaseAnonKey;
+
 // Expose whether Supabase is configured so callers can guard usage
 export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseAnonKey);
 

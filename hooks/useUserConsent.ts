@@ -36,6 +36,7 @@ export function useUserConsent(): UseUserConsentResult {
   const [isInitialized, setIsInitialized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasInitFailed, setHasInitFailed] = useState(false);
 
   /**
    * Initialize consent service
@@ -52,6 +53,7 @@ export function useUserConsent(): UseUserConsentResult {
       const info = await userConsentService.initialize(config);
       setConsentInfo(info);
       setIsInitialized(true);
+      setHasInitFailed(false);
       
       console.log('✅ Consent initialized via hook');
       return info;
@@ -59,8 +61,24 @@ export function useUserConsent(): UseUserConsentResult {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to initialize consent';
       setError(errorMessage);
-      console.error('❌ Consent initialization failed via hook:', err);
-      throw err;
+      setHasInitFailed(true);
+
+      if (errorMessage.toLowerCase().includes('publisher misconfiguration')) {
+        console.warn('⚠️ Consent initialization skipped (non-fatal):', errorMessage);
+      } else {
+        console.error('❌ Consent initialization failed via hook:', err);
+      }
+
+      // Mark initialized to stop auto-retrying/spamming; service will provide safe defaults.
+      setIsInitialized(true);
+      const fallback = userConsentService.getConsentInfo();
+      return fallback || {
+        status: AdsConsentStatus.UNKNOWN,
+        canRequestAds: false,
+        isPrivacyOptionsRequired: false,
+        lastUpdated: Date.now(),
+        userLocation: 'UNKNOWN',
+      };
     } finally {
       setIsLoading(false);
     }
@@ -166,7 +184,7 @@ export function useUserConsent(): UseUserConsentResult {
    * Auto-initialize on mount
    */
   useEffect(() => {
-    if (!isInitialized && !isLoading) {
+    if (!isInitialized && !isLoading && !hasInitFailed) {
       initializeConsent({
         debugMode: __DEV__,
         enableLogging: true,
@@ -175,7 +193,7 @@ export function useUserConsent(): UseUserConsentResult {
         console.error('Auto-initialization failed:', err);
       });
     }
-  }, [isInitialized, isLoading, initializeConsent]);
+  }, [isInitialized, isLoading, hasInitFailed, initializeConsent]);
 
   /**
    * Handle app state changes

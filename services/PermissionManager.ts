@@ -3,19 +3,18 @@ import * as Location from 'expo-location';
 import * as Contacts from 'expo-contacts';
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
-import { ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { Audio } from 'expo-av';
 import { openSettings } from 'expo-linking';
 
 // Permission types
-export type PermissionType = 
-  | 'microphone' 
-  | 'speechRecognition' 
-  | 'camera' 
-  | 'photos' 
-  | 'contacts' 
-  | 'location' 
-  | 'notifications';
+export type PermissionType =
+  | 'microphone'
+  | 'camera'
+  | 'contacts'
+  | 'location'
+  | 'notifications'
+  | 'photos'
+  | 'speechRecognition';
 
 export type PermissionStatus = 'granted' | 'denied' | 'undetermined' | 'restricted';
 
@@ -43,23 +42,13 @@ const PERMISSION_CONFIGS: Record<PermissionType, PermissionInfo> = {
     title: 'Microphone Access',
     description: 'Allow Talksy to access your microphone',
     reason: 'We need microphone access to listen to your voice commands and provide voice assistant functionality.',
-    settingsHint: Platform.OS === 'ios' 
+    settingsHint: Platform.OS === 'ios'
       ? 'Go to Settings > Privacy & Security > Microphone > Talksy and enable access.'
       : 'Go to Settings > Apps > Talksy > Permissions > Microphone and enable access.',
     icon: 'mic.fill',
     required: true,
   },
-  speechRecognition: {
-    type: 'speechRecognition',
-    title: 'Speech Recognition',
-    description: 'Allow Talksy to use speech recognition',
-    reason: 'We need speech recognition to convert your voice into text for the voice assistant.',
-    settingsHint: Platform.OS === 'ios'
-      ? 'Go to Settings > Privacy & Security > Speech Recognition > Talksy and enable access.'
-      : 'Speech recognition is handled through microphone permissions on Android.',
-    icon: 'speaker.wave.2',
-    required: true,
-  },
+
   camera: {
     type: 'camera',
     title: 'Camera Access',
@@ -71,17 +60,7 @@ const PERMISSION_CONFIGS: Record<PermissionType, PermissionInfo> = {
     icon: 'camera.fill',
     required: false,
   },
-  photos: {
-    type: 'photos',
-    title: 'Photo Library Access',
-    description: 'Allow Talksy to access your photos',
-    reason: 'We need photo library access to let you choose profile pictures and share images.',
-    settingsHint: Platform.OS === 'ios'
-      ? 'Go to Settings > Privacy & Security > Photos > Talksy and enable access.'
-      : 'Go to Settings > Apps > Talksy > Permissions > Storage and enable access.',
-    icon: 'person.text.rectangle',
-    required: false,
-  },
+
   contacts: {
     type: 'contacts',
     title: 'Contacts Access',
@@ -115,6 +94,28 @@ const PERMISSION_CONFIGS: Record<PermissionType, PermissionInfo> = {
     icon: 'bell',
     required: false,
   },
+  photos: {
+    type: 'photos',
+    title: 'Photos Access',
+    description: 'Allow Talksy to access your photos',
+    reason: 'We need photos access to let you select images from your gallery.',
+    settingsHint: Platform.OS === 'ios'
+      ? 'Go to Settings > Privacy & Security > Photos > Talksy and enable access.'
+      : 'Go to Settings > Apps > Talksy > Permissions > Storage and enable access.',
+    icon: 'photo',
+    required: false,
+  },
+  speechRecognition: {
+    type: 'speechRecognition',
+    title: 'Speech Recognition Access',
+    description: 'Allow Talksy to use speech recognition',
+    reason: 'We need speech recognition access to process your voice commands and provide accurate responses.',
+    settingsHint: Platform.OS === 'ios'
+      ? 'Go to Settings > Privacy & Security > Speech Recognition > Talksy and enable access.'
+      : 'Go to Settings > Apps > Talksy > Permissions > Microphone and enable access.',
+    icon: 'waveform',
+    required: true,
+  },
 };
 
 export class PermissionManager {
@@ -122,7 +123,7 @@ export class PermissionManager {
   private permissionCache: Map<PermissionType, { result: PermissionResult; timestamp: number }> = new Map();
   private readonly CACHE_DURATION = 30 * 1000; // 30 seconds
 
-  private constructor() {}
+  private constructor() { }
 
   public static getInstance(): PermissionManager {
     if (!PermissionManager.instance) {
@@ -151,7 +152,7 @@ export class PermissionManager {
   private isCacheValid(type: PermissionType): boolean {
     const cached = this.permissionCache.get(type);
     if (!cached) return false;
-    
+
     const now = Date.now();
     return (now - cached.timestamp) < this.CACHE_DURATION;
   }
@@ -196,12 +197,12 @@ export class PermissionManager {
           return 'undetermined';
       }
     }
-    
+
     // Handle Expo permission status enums
     if (status === Location.PermissionStatus.GRANTED) return 'granted';
     if (status === Location.PermissionStatus.DENIED) return 'denied';
     if (status === Location.PermissionStatus.UNDETERMINED) return 'undetermined';
-    
+
     return 'undetermined';
   }
 
@@ -240,15 +241,7 @@ export class PermissionManager {
           };
           break;
 
-        case 'speechRecognition':
-          const speechPermission = await ExpoSpeechRecognitionModule.getPermissionsAsync();
-          result = {
-            status: this.mapPermissionStatus(speechPermission.status),
-            granted: speechPermission.granted,
-            canAskAgain: speechPermission.canAskAgain,
-            expires: speechPermission.expires,
-          };
-          break;
+
 
         case 'camera':
           const cameraPermission = await ImagePicker.getCameraPermissionsAsync();
@@ -260,15 +253,7 @@ export class PermissionManager {
           };
           break;
 
-        case 'photos':
-          const mediaPermission = await ImagePicker.getMediaLibraryPermissionsAsync();
-          result = {
-            status: this.mapPermissionStatus(mediaPermission.status),
-            granted: mediaPermission.granted,
-            canAskAgain: mediaPermission.canAskAgain,
-            expires: mediaPermission.expires,
-          };
-          break;
+
 
         case 'contacts':
           const contactsPermission = await Contacts.getPermissionsAsync();
@@ -295,6 +280,27 @@ export class PermissionManager {
             granted: notificationPermission.granted,
             canAskAgain: notificationPermission.canAskAgain,
             expires: notificationPermission.expires,
+          };
+          break;
+
+        case 'photos':
+          const photosPermission = await ImagePicker.getMediaLibraryPermissionsAsync();
+          result = {
+            status: this.mapPermissionStatus(photosPermission.status),
+            granted: photosPermission.granted,
+            canAskAgain: photosPermission.canAskAgain,
+            expires: photosPermission.expires,
+          };
+          break;
+
+        case 'speechRecognition':
+          // Speech recognition uses microphone permissions on most platforms
+          const speechPermission = await Audio.getPermissionsAsync();
+          result = {
+            status: this.mapPermissionStatus(speechPermission.status),
+            granted: speechPermission.granted,
+            canAskAgain: speechPermission.canAskAgain,
+            expires: speechPermission.expires,
           };
           break;
 
@@ -342,15 +348,7 @@ export class PermissionManager {
           };
           break;
 
-        case 'speechRecognition':
-          const speechPermission = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
-          result = {
-            status: this.mapPermissionStatus(speechPermission.status),
-            granted: speechPermission.granted,
-            canAskAgain: speechPermission.canAskAgain,
-            expires: speechPermission.expires,
-          };
-          break;
+
 
         case 'camera':
           const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
@@ -362,15 +360,7 @@ export class PermissionManager {
           };
           break;
 
-        case 'photos':
-          const mediaPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-          result = {
-            status: this.mapPermissionStatus(mediaPermission.status),
-            granted: mediaPermission.granted,
-            canAskAgain: mediaPermission.canAskAgain,
-            expires: mediaPermission.expires,
-          };
-          break;
+
 
         case 'contacts':
           const contactsPermission = await Contacts.requestPermissionsAsync();
@@ -397,6 +387,27 @@ export class PermissionManager {
             granted: notificationPermission.granted,
             canAskAgain: notificationPermission.canAskAgain,
             expires: notificationPermission.expires,
+          };
+          break;
+
+        case 'photos':
+          const photosPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          result = {
+            status: this.mapPermissionStatus(photosPermission.status),
+            granted: photosPermission.granted,
+            canAskAgain: photosPermission.canAskAgain,
+            expires: photosPermission.expires,
+          };
+          break;
+
+        case 'speechRecognition':
+          // Speech recognition uses microphone permissions on most platforms
+          const speechPermission = await Audio.requestPermissionsAsync();
+          result = {
+            status: this.mapPermissionStatus(speechPermission.status),
+            granted: speechPermission.granted,
+            canAskAgain: speechPermission.canAskAgain,
+            expires: speechPermission.expires,
           };
           break;
 

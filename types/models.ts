@@ -12,6 +12,7 @@ export interface ModelInfo {
   name: string;
   description: string;
   imagePath: any; // Imported image asset
+  voice: 'Ara' | 'Sal' | 'Eve';
   isDefault?: boolean;
 }
 
@@ -63,12 +64,14 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
     name: 'Maya',
     description: 'Friendly and approachable',
     imagePath: require('../assets/models/model1.png'),
+    voice: 'Ara',
   },
   {
     id: 'model2',
     name: 'Alex',
     description: 'Professional and reliable',
     imagePath: require('../assets/models/model2.png'),
+    voice: 'Eve',
     isDefault: true,
   },
   {
@@ -76,24 +79,28 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
     name: 'Sam',
     description: 'Creative and energetic',
     imagePath: require('../assets/models/model3.png'),
+    voice: 'Sal',
   },
   {
     id: 'model4',
     name: 'Jordan',
     description: 'Calm and thoughtful',
     imagePath: require('../assets/models/model4.png'),
+    voice: 'Eve',
   },
   {
     id: 'model5',
     name: 'Taylor',
     description: 'Modern and stylish',
     imagePath: require('../assets/models/model5.png'),
+    voice: 'Ara',
   },
   {
     id: 'model6',
     name: 'Riley',
     description: 'Cheerful and optimistic',
     imagePath: require('../assets/models/model6.png'),
+    voice: 'Ara',
   },
 ];
 

@@ -28,6 +28,7 @@ class UserConsentService {
   private consentInfo: ConsentInfo | null = null;
   private isInitialized = false;
   private initializationPromise: Promise<void> | null = null;
+  private hasLoggedNonFatalInitError = false;
 
   private readonly STORAGE_KEY = 'user_consent_info';
   private readonly CONSENT_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
@@ -62,7 +63,9 @@ class UserConsentService {
       return this.consentInfo!;
     }
 
-    this.initializationPromise = this.performInitialization(config);
+    this.initializationPromise = this.performInitialization(config).finally(() => {
+      this.initializationPromise = null;
+    });
     await this.initializationPromise;
     return this.consentInfo!;
   }
@@ -92,9 +95,19 @@ class UserConsentService {
       console.log('✅ User Consent Service initialized successfully');
 
     } catch (error) {
-      console.error('❌ Failed to initialize User Consent Service:', error);
-      
-      // Create fallback consent info
+      const message = this.getErrorMessage(error);
+      const isNonFatal = this.isPublisherMisconfigurationErrorMessage(message);
+
+      if (isNonFatal) {
+        if (!this.hasLoggedNonFatalInitError) {
+          this.hasLoggedNonFatalInitError = true;
+          console.warn('⚠️ Consent configuration issue (non-fatal):', message);
+        }
+      } else {
+        console.error('❌ Failed to initialize User Consent Service:', error);
+      }
+
+      // Create fallback consent info and continue app startup.
       this.consentInfo = {
         status: AdsConsentStatus.UNKNOWN,
         canRequestAds: false,
@@ -102,8 +115,8 @@ class UserConsentService {
         lastUpdated: Date.now(),
         userLocation: 'UNKNOWN',
       };
-      
-      throw error;
+
+      this.isInitialized = true;
     }
   }
 
@@ -171,9 +184,47 @@ class UserConsentService {
       }
 
     } catch (error) {
+      const message = this.getErrorMessage(error);
+      if (this.isPublisherMisconfigurationErrorMessage(message)) {
+        if (!this.hasLoggedNonFatalInitError) {
+          this.hasLoggedNonFatalInitError = true;
+          console.warn('⚠️ UMP publisher misconfiguration (no consent form configured). Continuing without ads consent:', message);
+        }
+
+        this.consentInfo = {
+          status: AdsConsentStatus.UNKNOWN,
+          canRequestAds: false,
+          isPrivacyOptionsRequired: false,
+          lastUpdated: Date.now(),
+          userLocation: 'UNKNOWN',
+        };
+        await this.cacheConsentInfo();
+        return;
+      }
+
       console.error('❌ Failed to request consent info update:', error);
       throw error;
     }
+  }
+
+  private getErrorMessage(error: unknown): string {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'string') return error;
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return 'Unknown error';
+    }
+  }
+
+  private isPublisherMisconfigurationErrorMessage(message: string): boolean {
+    const m = message.toLowerCase();
+    return (
+      m.includes('publisher misconfiguration') ||
+      m.includes('no form') ||
+      m.includes('no form(s) configured') ||
+      m.includes('account configuration')
+    );
   }
 
   /**

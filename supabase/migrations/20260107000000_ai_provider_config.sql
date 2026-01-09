@@ -1,4 +1,4 @@
--- Stores provider configuration for server-side AI calls (Gemini)
+-- Stores provider configuration for server-side AI calls (Grok)
 
 create table if not exists public.ai_provider_config (
   provider text primary key,

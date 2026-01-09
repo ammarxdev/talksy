@@ -8,7 +8,6 @@ import { AuthGuard } from '@/components/AuthGuard';
 import { useNavigationInterstitialAd } from '@/hooks/useNavigationInterstitialAd';
 import { useNavigationState } from '@react-navigation/native';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
-import { VoiceAssistantProvider } from '@/components/VoiceAssistantProviderWrapper';
 
 export default function TabLayout() {
   const { modelColors, baseColors, colorScheme } = useModelTheme();
@@ -46,54 +45,52 @@ export default function TabLayout() {
 
   return (
     <AuthGuard requireAuth={true}>
-      <VoiceAssistantProvider>
-        <Tabs
-          tabBar={(props: BottomTabBarProps) => <TabBarBackground {...props} />}
-          screenOptions={{
-            tabBarActiveTintColor: getActiveTabColor(),
-            tabBarInactiveTintColor: getInactiveTabColor(),
-            headerShown: false,
-            tabBarStyle: {
-              position: 'absolute',
-              backgroundColor: 'transparent',
-              borderTopWidth: 0,
-              elevation: 0,
-              shadowOpacity: 0,
-              height: 68, // Exact match to TabBarBackground floatingContainer height
-              paddingTop: 0,
-              paddingBottom: 0,
-            },
-            tabBarItemStyle: {
-              // Let the tab items auto-center without manual offsets
-              paddingVertical: Platform.select({ ios: 8, android: 6, default: 6 }),
-              marginHorizontal: 12,
-              borderRadius: 28,
-              backgroundColor: 'transparent',
-            },
-            tabBarLabelStyle: {
-              fontSize: 12,
-              fontWeight: '600',
-              marginTop: 2,
-              textAlign: 'center',
-            },
-          }}>
-          <Tabs.Screen
-            name="index"
-            options={{
-              title: '',
-              tabBarButton: () => null,
-            }}
-          />
+      <Tabs
+        tabBar={(props: BottomTabBarProps) => <TabBarBackground {...props} />}
+        screenOptions={{
+          tabBarActiveTintColor: getActiveTabColor(),
+          tabBarInactiveTintColor: getInactiveTabColor(),
+          headerShown: false,
+          tabBarStyle: {
+            position: 'absolute',
+            backgroundColor: 'transparent',
+            borderTopWidth: 0,
+            elevation: 0,
+            shadowOpacity: 0,
+            height: 68, // Exact match to TabBarBackground floatingContainer height
+            paddingTop: 0,
+            paddingBottom: 0,
+          },
+          tabBarItemStyle: {
+            // Let the tab items auto-center without manual offsets
+            paddingVertical: Platform.select({ ios: 8, android: 6, default: 6 }),
+            marginHorizontal: 12,
+            borderRadius: 28,
+            backgroundColor: 'transparent',
+          },
+          tabBarLabelStyle: {
+            fontSize: 12,
+            fontWeight: '600',
+            marginTop: 2,
+            textAlign: 'center',
+          },
+        }}>
+        <Tabs.Screen
+          name="index"
+          options={{
+            title: '',
+            tabBarButton: () => null,
+          }}
+        />
 
-          <Tabs.Screen
-            name="profile"
-            options={{
-              title: '',
-              tabBarButton: () => null,
-            }}
-          />
-        </Tabs>
-      </VoiceAssistantProvider>
+        <Tabs.Screen
+          name="profile"
+          options={{
+            title: '',
+            tabBarButton: () => null,
+          }}
+        />
+      </Tabs>
     </AuthGuard>
   );
 }

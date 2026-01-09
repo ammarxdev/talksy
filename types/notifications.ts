@@ -11,10 +11,10 @@ export type NotificationPermissionStatus = 'granted' | 'denied' | 'undetermined'
 // Notification categories for different types of notifications
 export enum NotificationCategory {
   SYSTEM = 'system',
-  AI_RESPONSE = 'ai_response',
+
   REMINDER = 'reminder',
   ERROR = 'error',
-  CONVERSATION = 'conversation',
+
 }
 
 // Notification priority levels
@@ -29,36 +29,36 @@ export enum NotificationPriority {
 export interface NotificationSettings {
   // Global notification toggle
   enabled: boolean;
-  
+
   // Permission status
   permissionStatus: NotificationPermissionStatus;
-  
+
   // Last time permission was requested (timestamp)
   lastPermissionRequest: number | null;
-  
+
   // Sound and vibration preferences
   soundEnabled: boolean;
   vibrationEnabled: boolean;
-  
+
   // Category-specific settings
   categories: {
     [NotificationCategory.SYSTEM]: boolean;
-    [NotificationCategory.AI_RESPONSE]: boolean;
+
     [NotificationCategory.REMINDER]: boolean;
     [NotificationCategory.ERROR]: boolean;
-    [NotificationCategory.CONVERSATION]: boolean;
+
   };
-  
+
   // Advanced settings
   quietHours: {
     enabled: boolean;
     startTime: string; // HH:MM format
     endTime: string;   // HH:MM format
   };
-  
+
   // Push notification token (for future push notifications)
   pushToken: string | null;
-  
+
   // Settings version for migration purposes
   version: number;
 }
@@ -72,10 +72,10 @@ export const DEFAULT_NOTIFICATION_SETTINGS: NotificationSettings = {
   vibrationEnabled: true,
   categories: {
     [NotificationCategory.SYSTEM]: true,
-    [NotificationCategory.AI_RESPONSE]: true,
+
     [NotificationCategory.REMINDER]: true,
     [NotificationCategory.ERROR]: true,
-    [NotificationCategory.CONVERSATION]: true,
+
   },
   quietHours: {
     enabled: false,
@@ -106,7 +106,7 @@ export interface ScheduledNotification {
 }
 
 // Notification trigger types
-export type NotificationTrigger = 
+export type NotificationTrigger =
   | { type: 'immediate' }
   | { type: 'delay'; seconds: number }
   | { type: 'date'; date: Date }
@@ -151,23 +151,23 @@ export interface NotificationContextType {
   settings: NotificationSettings;
   updateSettings: (updates: Partial<NotificationSettings>) => Promise<void>;
   resetSettings: () => Promise<void>;
-  
+
   // Permissions
   requestPermissions: () => Promise<PermissionRequestResult>;
   checkPermissions: () => Promise<NotificationPermissionStatus>;
   openSettings: () => void;
-  
+
   // Notifications
   scheduleNotification: (content: NotificationContent, trigger?: NotificationTrigger) => Promise<string>;
   cancelNotification: (id: string) => Promise<void>;
   cancelAllNotifications: () => Promise<void>;
   getScheduledNotifications: () => Promise<ScheduledNotification[]>;
-  
+
   // Status
   serviceStatus: NotificationServiceStatus;
   isLoading: boolean;
   error: string | null;
-  
+
   // Utility methods
   isQuietHours: () => boolean;
   canSendNotification: (category: NotificationCategory) => boolean;
@@ -182,10 +182,10 @@ export interface UseNotificationsReturn extends NotificationContextType {
 
   // Quick notification methods
   showSystemNotification: (title: string, body: string, data?: Record<string, any>) => Promise<void>;
-  showAIResponseNotification: (title: string, body: string, data?: Record<string, any>) => Promise<void>;
+
   showErrorNotification: (title: string, body: string, data?: Record<string, any>) => Promise<void>;
   showReminderNotification: (title: string, body: string, trigger?: NotificationTrigger, data?: Record<string, any>) => Promise<string | null>;
-  showConversationNotification: (title: string, body: string, data?: Record<string, any>) => Promise<void>;
+
 
   // Additional utility methods
   getNotificationStatus: () => {
@@ -219,14 +219,7 @@ export const NOTIFICATION_CHANNELS = {
     sound: true,
     vibrate: true,
   },
-  [NotificationCategory.AI_RESPONSE]: {
-    id: 'ai_response',
-    name: 'AI Responses',
-    description: 'Notifications when AI responses are ready',
-    importance: 'normal' as const,
-    sound: true,
-    vibrate: false,
-  },
+
   [NotificationCategory.REMINDER]: {
     id: 'reminder',
     name: 'Reminders',
@@ -243,14 +236,7 @@ export const NOTIFICATION_CHANNELS = {
     sound: true,
     vibrate: true,
   },
-  [NotificationCategory.CONVERSATION]: {
-    id: 'conversation',
-    name: 'Conversation Updates',
-    description: 'Updates about ongoing conversations',
-    importance: 'low' as const,
-    sound: false,
-    vibrate: false,
-  },
+
 } as const;
 
 // Error types for notification system

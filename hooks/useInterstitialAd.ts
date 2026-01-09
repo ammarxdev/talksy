@@ -6,19 +6,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { AppState, AppStateStatus } from 'react-native';
 import { interstitialAdService, type InterstitialAdState } from '@/services/InterstitialAdService';
-import { textToSpeechService } from '@/services/TextToSpeechService';
+
 import { adFrequencyManager } from '@/utils/adFrequencyManager';
 import { voiceSessionTracker } from '@/utils/voiceSessionTracker';
 
 export interface UseInterstitialAdResult {
   // Ad state
   adState: InterstitialAdState;
-  
+
   // Control functions
   showAd: () => Promise<{ success: boolean; reason?: string }>;
   preloadAd: (testMode?: boolean) => Promise<void>;
   canShowAd: () => { canShow: boolean; reason?: string };
-  
+
   // Utility functions
   getTimeUntilNextAd: () => number;
   getAdStats: () => any;
@@ -42,18 +42,18 @@ export function useInterstitialAd(): UseInterstitialAdResult {
    */
   const showAd = useCallback(async (): Promise<{ success: boolean; reason?: string }> => {
     // Avoid showing if TTS is still speaking
-    if (textToSpeechService.getSpeechStatus().isSpeaking) {
-      return { success: false, reason: 'Assistant speaking' };
-    }
+    // if (textToSpeechService.getSpeechStatus().isSpeaking) {
+    //   return { success: false, reason: 'Assistant speaking' };
+    // }
     const result = await interstitialAdService.showAd();
     updateAdState();
-    
+
     if (result.success) {
       console.log('✅ Interstitial ad shown successfully');
     } else {
       console.log('⚠️ Interstitial ad not shown:', result.reason);
     }
-    
+
     return result;
   }, [updateAdState]);
 
@@ -121,7 +121,7 @@ export function useInterstitialAd(): UseInterstitialAdResult {
       if (nextAppState === 'active') {
         // App became active - update state and potentially preload
         updateAdState();
-        
+
         // Preload if not loaded and not loading
         const currentState = interstitialAdService.getState();
         if (!currentState.isLoaded && !currentState.isLoading) {

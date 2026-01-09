@@ -20,7 +20,7 @@ jest.mock('expo-constants', () => ({
   expoConfig: {
     extra: {
       ASSEMBLYAI_API_KEY: 'test-key',
-      GEMINI_API_KEY: 'test-key',
+      GROK_API_KEY: 'test-key',
     },
   },
 }));

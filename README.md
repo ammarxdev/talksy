@@ -6,7 +6,7 @@ A React Native voice-activated AI assistant app built with Expo that allows user
 
 - **🔐 Authentication**: Complete email/password and Google OAuth authentication system
 - **🎤 Voice-to-Text**: Convert speech to text using AssemblyAI
-- **🤖 AI Conversations**: Generate intelligent responses using Gemini AI
+- **🤖 AI Conversations**: Generate intelligent responses using Grok AI (xAI)
 - **🔊 Text-to-Speech**: Speak AI responses back to users using Expo Speech
 - **🎨 3D Avatar**: Interactive 3D model with animations and visual feedback
 - **🌙 Dark Mode**: Complete theme system with light/dark mode support
@@ -18,7 +18,7 @@ A React Native voice-activated AI assistant app built with Expo that allows user
 ## 🏗️ Architecture
 
 ```
-User Speech → Expo Speech Recognition (STT) → Gemini AI → Expo Speech (TTS) → User Hears Response
+User Speech → Expo Speech Recognition (STT) → Grok AI → Expo Speech (TTS) → User Hears Response
 ```
 
 ## 🚀 Quick Start
@@ -27,7 +27,7 @@ User Speech → Expo Speech Recognition (STT) → Gemini AI → Expo Speech (TTS
 
 - Node.js (v16 or higher)
 - Expo CLI (`npm install -g @expo/cli`)
-- Gemini AI API Key (stored in Supabase; not in the app)
+- Grok AI API Key from xAI (stored in server-side .env file; never in Supabase database)
 - Supabase Account (for authentication)
 - Device with speech recognition support (Android 13+ or iOS 17+ recommended)
 
@@ -54,11 +54,25 @@ User Speech → Expo Speech Recognition (STT) → Gemini AI → Expo Speech (TTS
    EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
    ```
 
-3. **Configure Gemini via Supabase (recommended)**
+3. **Configure Grok API Key (REQUIRED)**
 
-   This app calls a Supabase Edge Function (`gemini-proxy`) which fetches the Gemini API key + model from a Supabase table at request time.
+   **CRITICAL RULE**: API keys are loaded ONLY from the `.env` file. NEVER store API keys in Supabase database.
 
-   Setup guide: docs/GEMINI_SUPABASE_MANAGED_CONFIG.md
+   Add your xAI API key to your `.env` file:
+   ```env
+   # Add to your root .env file
+   XAI_API_KEY=your-xai-api-key-here
+   XAI_MODEL=grok-beta
+   ```
+
+   Also create `supabase/functions/.env` with the same values:
+   ```bash
+   cd supabase/functions
+   cp .env.example .env
+   # Then edit .env and add your XAI_API_KEY
+   ```
+   
+   For more details, see: docs/GROK_INTEGRATION.md
 
 4. **Start the app**
 
@@ -143,7 +157,7 @@ User Speech → Expo Speech Recognition (STT) → Gemini AI → Expo Speech (TTS
 │   ├── useNativeSpeechRecognition.ts # Native speech recognition hook
 │   └── useVoiceAssistantFlowNative.ts # Voice assistant hook (native)
 ├── services/                  # API and service integrations
-│   ├── AIResponseService.ts   # Gemini AI integration
+│   ├── AIResponseService.ts   # Grok AI integration
 │   ├── ContactService.ts      # Contact form handling
 │   ├── NotificationService.ts # Notification management
 │   ├── ExpoSpeechToTextService.ts # Native speech recognition service
@@ -164,7 +178,7 @@ User Speech → Expo Speech Recognition (STT) → Gemini AI → Expo Speech (TTS
 - **Frontend**: React Native with Expo SDK 53
 - **Navigation**: Expo Router with tab-based navigation
 - **Authentication**: Supabase with email/password and Google OAuth
-- **AI Services**: Google Gemini AI for responses, AssemblyAI for speech-to-text
+- **AI Services**: xAI Grok for responses, AssemblyAI for speech-to-text
 - **3D Graphics**: Three.js with React Three Fiber for 3D avatar
 - **State Management**: React Context for global state
 - **Styling**: React Native StyleSheet with theme system

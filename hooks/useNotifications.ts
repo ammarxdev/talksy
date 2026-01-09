@@ -27,16 +27,16 @@ export const useNotifications = (): UseNotificationsReturn => {
     try {
       // Request permissions first
       const permissionResult = await context.requestPermissions();
-      
+
       if (permissionResult.granted) {
         // Update settings to enable notifications
         await context.updateSettings({ enabled: true });
         return true;
       } else {
         // Permission denied, but still update settings to reflect user intent
-        await context.updateSettings({ 
+        await context.updateSettings({
           enabled: false,
-          permissionStatus: permissionResult.status 
+          permissionStatus: permissionResult.status
         });
         return false;
       }
@@ -53,7 +53,7 @@ export const useNotifications = (): UseNotificationsReturn => {
     try {
       // Cancel all scheduled notifications
       await context.cancelAllNotifications();
-      
+
       // Update settings to disable notifications
       await context.updateSettings({ enabled: false });
     } catch (error) {
@@ -66,7 +66,7 @@ export const useNotifications = (): UseNotificationsReturn => {
    * Toggle a specific notification category
    */
   const toggleCategory = useCallback(async (
-    category: NotificationCategory, 
+    category: NotificationCategory,
     enabled: boolean
   ): Promise<void> => {
     try {
@@ -113,36 +113,7 @@ export const useNotifications = (): UseNotificationsReturn => {
     }
   }, [context]);
 
-  /**
-   * Show an AI response notification
-   */
-  const showAIResponseNotification = useCallback(async (
-    title: string,
-    body: string,
-    data?: Record<string, any>
-  ): Promise<void> => {
-    try {
-      if (!context.canSendNotification(NotificationCategory.AI_RESPONSE)) {
-        console.log('AI response notifications are disabled or not permitted');
-        return;
-      }
 
-      const content: NotificationContent = {
-        title,
-        body,
-        data: { ...data, category: NotificationCategory.AI_RESPONSE },
-        category: NotificationCategory.AI_RESPONSE,
-        priority: NotificationPriority.NORMAL,
-        sound: true,
-        vibrate: false,
-      };
-
-      await context.scheduleNotification(content);
-    } catch (error) {
-      console.error('Failed to show AI response notification:', error);
-      throw error;
-    }
-  }, [context]);
 
   /**
    * Show an error notification
@@ -207,36 +178,7 @@ export const useNotifications = (): UseNotificationsReturn => {
     }
   }, [context]);
 
-  /**
-   * Show a conversation notification
-   */
-  const showConversationNotification = useCallback(async (
-    title: string,
-    body: string,
-    data?: Record<string, any>
-  ): Promise<void> => {
-    try {
-      if (!context.canSendNotification(NotificationCategory.CONVERSATION)) {
-        console.log('Conversation notifications are disabled or not permitted');
-        return;
-      }
 
-      const content: NotificationContent = {
-        title,
-        body,
-        data: { ...data, category: NotificationCategory.CONVERSATION },
-        category: NotificationCategory.CONVERSATION,
-        priority: NotificationPriority.LOW,
-        sound: false,
-        vibrate: false,
-      };
-
-      await context.scheduleNotification(content);
-    } catch (error) {
-      console.error('Failed to show conversation notification:', error);
-      throw error;
-    }
-  }, [context]);
 
   /**
    * Schedule a delayed notification
@@ -295,7 +237,7 @@ export const useNotifications = (): UseNotificationsReturn => {
     try {
       // Check current status
       const currentStatus = await context.checkPermissions();
-      
+
       if (currentStatus === 'granted') {
         return true;
       }
@@ -348,16 +290,16 @@ export const useNotifications = (): UseNotificationsReturn => {
   return {
     // Context methods
     ...context,
-    
+
     // Additional convenience methods
     enableNotifications,
     disableNotifications,
     toggleCategory,
     showSystemNotification,
-    showAIResponseNotification,
+
     showErrorNotification,
     showReminderNotification,
-    showConversationNotification,
+
     scheduleDelayedNotification,
     isNotificationEnabled,
     getNotificationStatus,

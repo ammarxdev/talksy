@@ -10,7 +10,7 @@ import { adFrequencyManager } from '@/utils/adFrequencyManager';
 import { voiceSessionTracker } from '@/utils/voiceSessionTracker';
 import { networkMonitor } from '@/utils/networkMonitor';
 import { AD_UNIT_IDS, AD_ANALYTICS_EVENTS } from '@/config/admob';
-import { textToSpeechService } from '@/services/TextToSpeechService';
+
 import type { AdLoadResult } from '@/types/admob';
 
 export interface InterstitialAdState {
@@ -38,7 +38,7 @@ class InterstitialAdService {
   private readonly PRELOAD_DELAY = 3000; // 3 seconds after app start (faster readiness)
   private readonly RELOAD_DELAY = 20000; // 20 seconds between reload attempts
 
-  private constructor() {}
+  private constructor() { }
 
   static getInstance(): InterstitialAdService {
     if (!InterstitialAdService.instance) {
@@ -173,7 +173,7 @@ class InterstitialAdService {
     this.interstitialAd.addAdEventListener(AdEventType.OPENED, () => {
       console.log('👁️ Interstitial ad opened');
       this.state.isShowing = true;
-      
+
       adMobService.logAdEvent(AD_ANALYTICS_EVENTS.AD_OPENED, 'interstitial');
     });
 
@@ -181,12 +181,12 @@ class InterstitialAdService {
       console.log('❌ Interstitial ad closed');
       this.state.isShowing = false;
       this.state.isLoaded = false;
-      
+
       // Record that ad was shown for frequency management
       adFrequencyManager.recordInterstitialShown();
       // Reset voice-session-based session counter and randomize next threshold (2-3)
       voiceSessionTracker.onInterstitialAdShown?.();
-      
+
       // Preload next ad
       setTimeout(() => {
         this.preloadAd();
@@ -218,9 +218,7 @@ class InterstitialAdService {
 
       // Do not interrupt if TTS is speaking. Defer briefly and re-check.
       // If TTS is speaking, do not show; we'll be called again after state returns to idle
-      if (textToSpeechService.getSpeechStatus().isSpeaking) {
-        return { success: false, reason: 'Assistant speaking' };
-      }
+
 
       // Check network suitability
       const networkCheck = networkMonitor.isNetworkSuitableForAds();
@@ -334,7 +332,7 @@ class InterstitialAdService {
       // Remove event listeners and clean up
       this.interstitialAd = null;
     }
-    
+
     this.state = {
       isLoaded: false,
       isLoading: false,

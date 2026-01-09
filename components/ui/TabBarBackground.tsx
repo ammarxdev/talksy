@@ -15,27 +15,28 @@ export default function TabBarBackground(props: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const isDark = colorScheme === 'dark';
 
-  // Voice assistant context for stop button functionality
-  const { assistantState, isListening, stopListening } = useVoiceAssistantContext();
+  // Voice assistant context for call end button functionality
+  const { assistantState, showEndCallButton, stopConversation } = useVoiceAssistantContext();
 
-  // Animation for stop button
-  const stopButtonScale = React.useRef(new Animated.Value(1)).current;
-  const stopButtonOpacity = React.useRef(new Animated.Value(0)).current;
-  const [forceHideStopButton, setForceHideStopButton] = React.useState(false);
+  // Animation for call end button
+  const callEndButtonScale = React.useRef(new Animated.Value(1)).current;
+  const callEndButtonOpacity = React.useRef(new Animated.Value(0)).current;
 
-  // Determine if stop button should be visible - only during actual microphone listening and not force hidden
-  const shouldShowStopButton = isListening && !forceHideStopButton;
+  // End Call shows only after the call has successfully connected at least once, and stays until manual stop.
+  const shouldShowCallEndButton = showEndCallButton;
+  // Enforce: never render tab buttons during an active/connecting call session.
+  const shouldHideTabButtons = assistantState !== 'idle' || showEndCallButton;
 
-  // Animate stop button appearance/disappearance
+  // Animate call end button appearance/disappearance
   React.useEffect(() => {
-    if (shouldShowStopButton) {
+    if (shouldShowCallEndButton) {
       Animated.parallel([
-        Animated.timing(stopButtonOpacity, {
+        Animated.timing(callEndButtonOpacity, {
           toValue: 1,
           duration: 200,
           useNativeDriver: true,
         }),
-        Animated.spring(stopButtonScale, {
+        Animated.spring(callEndButtonScale, {
           toValue: 1,
           tension: 100,
           friction: 8,
@@ -44,19 +45,19 @@ export default function TabBarBackground(props: BottomTabBarProps) {
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(stopButtonOpacity, {
+        Animated.timing(callEndButtonOpacity, {
           toValue: 0,
           duration: 0, // Instant - 0ms for immediate hiding
           useNativeDriver: true,
         }),
-        Animated.timing(stopButtonScale, {
+        Animated.timing(callEndButtonScale, {
           toValue: 0.8,
           duration: 0, // Instant - 0ms for immediate hiding
           useNativeDriver: true,
         }),
       ]).start();
     }
-  }, [shouldShowStopButton]);
+  }, [shouldShowCallEndButton]);
 
   // Get the current active route from props
   const activeRouteIndex = props.state.index ?? 0;
@@ -90,10 +91,7 @@ export default function TabBarBackground(props: BottomTabBarProps) {
     }
   };
 
-  const handleStopListening = async () => {
-    // Force hide immediately
-    setForceHideStopButton(true);
-
+  const handleEndCall = async () => {
     // Provide haptic feedback
     if (Platform.OS === 'ios') {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -103,35 +101,22 @@ export default function TabBarBackground(props: BottomTabBarProps) {
 
     // Add visual feedback animation
     Animated.sequence([
-      Animated.timing(stopButtonScale, {
+      Animated.timing(callEndButtonScale, {
         toValue: 0.9,
         duration: 100,
         useNativeDriver: true,
       }),
-      Animated.timing(stopButtonScale, {
+      Animated.timing(callEndButtonScale, {
         toValue: 1,
         duration: 100,
         useNativeDriver: true,
       }),
     ]).start();
 
-    // Immediately hide the stop button
-    Animated.timing(stopButtonOpacity, {
-      toValue: 0,
-      duration: 0, // Instant - 0ms for immediate hiding
-      useNativeDriver: true,
-    }).start();
-
     try {
-      await stopListening();
+      await stopConversation();
     } catch (error) {
       console.error('Error stopping voice listening:', error);
-    } finally {
-      // Reset force hide after stopListening completes to allow normal behavior
-      // Use a small delay to ensure isListening state has fully propagated
-      setTimeout(() => {
-        setForceHideStopButton(false);
-      }, 100);
     }
   };
 
@@ -197,74 +182,72 @@ export default function TabBarBackground(props: BottomTabBarProps) {
         />
 
         {/* Custom Tab Icons */}
-        <View style={styles.tabIconsContainer}>
-          {tabs.map((tab) => {
-            const isActive = activeRouteName === tab.key;
-            const iconColor = isActive ? getActiveTabColor() : getInactiveTabColor();
+        {!shouldHideTabButtons && (
+          <View style={styles.tabIconsContainer}>
+            {tabs.map((tab) => {
+              const isActive = activeRouteName === tab.key;
+              const iconColor = isActive ? getActiveTabColor() : getInactiveTabColor();
 
-            return (
-              <TouchableOpacity
-                key={tab.key}
-                style={[
-                  styles.tabButton,
-                  {
-                    backgroundColor: isActive ? `${iconColor}20` : 'transparent',
-                  }
-                ]}
-                onPress={() => {
-                  handleTabPress(tab.key);
-                }}
-                activeOpacity={0.7}
-              >
-                <IconSymbol
-                  name={tab.icon}
-                  size={28}
-                  color={iconColor}
-                />
-                <Text style={[
-                  styles.tabLabel,
-                  { color: iconColor }
-                ]}>
-                  {tab.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-
-          {/* Stop Listening Button - Overlay when voice is active */}
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={[
+                    styles.tabButton,
+                    {
+                      backgroundColor: isActive ? `${iconColor}20` : 'transparent',
+                    }
+                  ]}
+                  onPress={() => {
+                    handleTabPress(tab.key);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <IconSymbol
+                    name={tab.icon}
+                    size={24}
+                    color={iconColor}
+                  />
+                  <Text style={[styles.tabLabel, { color: iconColor }]}>
+                    {tab.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+        {/* Call End Button - Overlay when voice is active */}
+        {shouldShowCallEndButton && (
           <Animated.View
             style={[
-              styles.stopButtonContainer,
+              styles.callEndButtonContainer,
               {
-                opacity: stopButtonOpacity,
-                transform: [{ scale: stopButtonScale }],
-                pointerEvents: shouldShowStopButton ? 'auto' : 'none',
+                opacity: callEndButtonOpacity,
+                transform: [{ scale: callEndButtonScale }],
               }
             ]}
           >
             <TouchableOpacity
               style={[
-                styles.stopButton,
+                styles.callEndButton,
                 {
                   backgroundColor: themeColors.accent,
                   borderColor: themeColors.primary,
                 }
               ]}
-              onPress={handleStopListening}
+              onPress={handleEndCall}
               activeOpacity={0.8}
-              disabled={!shouldShowStopButton}
             >
               <IconSymbol
-                name="stop.fill"
+                name="phone.down.fill"
                 size={24}
                 color="#FFFFFF"
               />
-              <Text style={styles.stopButtonText}>
-                Stop
+              <Text style={styles.callEndButtonText}>
+                End Call
               </Text>
             </TouchableOpacity>
           </Animated.View>
-        </View>
+        )}
       </View>
     </View>
   );
@@ -339,7 +322,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     textAlign: 'center',
   },
-  stopButtonContainer: {
+  callEndButtonContainer: {
     position: 'absolute',
     top: 0,
     left: 0,
@@ -350,9 +333,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 0, // Remove padding to allow full width
     backgroundColor: 'transparent',
-    zIndex: 2, // Ensure stop button is above tab buttons when visible
+    zIndex: 2, // Ensure call end button is above tab buttons when visible
   },
-  stopButton: {
+  callEndButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -363,7 +346,7 @@ const styles = StyleSheet.create({
     shadowColor: 'transparent', // Remove shadow as it's inside the container
     elevation: 0,
   },
-  stopButtonText: {
+  callEndButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
