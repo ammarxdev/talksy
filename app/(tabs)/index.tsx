@@ -30,6 +30,9 @@ export default function VoiceAssistantScreen() {
     assistantState,
     getStatusText,
     startConversation,
+    isInitialized,
+    initializationError,
+    error: voiceError,
   } = useVoiceAssistantContext();
 
   const fadeAnim = useRef(new RNAnimated.Value(0)).current;
@@ -37,6 +40,17 @@ export default function VoiceAssistantScreen() {
   const pulseAnim = useRef(new RNAnimated.Value(1)).current;
   const glowAnim = useRef(new RNAnimated.Value(0)).current;
   const breatheAnim = useRef(new RNAnimated.Value(1)).current;
+
+  // Get the status text, with initialization state handling
+  const getDisplayStatusText = () => {
+    if (!isInitialized) {
+      return 'Initializing...';
+    }
+    if (initializationError) {
+      return 'Initialization Error';
+    }
+    return getStatusText();
+  };
 
   useEffect(() => {
     RNAnimated.parallel([
@@ -103,7 +117,7 @@ export default function VoiceAssistantScreen() {
                   Voice Assistant
                 </ThemedText>
                 <ThemedText type="subtitle" style={[styles.subtitle, { color: isDark ? colors.textSecondary : modelColors.primary }]}>
-                  {getStatusText()}
+                  {getDisplayStatusText()}
                 </ThemedText>
               </View>
             </RNAnimated.View>
@@ -114,6 +128,11 @@ export default function VoiceAssistantScreen() {
             ]}>
               <ModelViewer
                 onPress={() => {
+                  // Only allow starting conversation if initialized and idle
+                  if (!isInitialized) {
+                    console.log('Cannot start conversation - not initialized yet');
+                    return;
+                  }
                   if (assistantState === 'idle') {
                     startConversation();
                   }
@@ -121,8 +140,8 @@ export default function VoiceAssistantScreen() {
                 width={layout.modelViewerDimensions.width}
                 height={layout.modelViewerDimensions.height}
                 gradientColors={[modelColors.gradientStart, modelColors.gradientMiddle, modelColors.gradientEnd, modelColors.surface] as any}
-                borderColor={assistantState === 'calling' ? colors.success : modelColors.primary}
-                shadowColor={assistantState === 'calling' ? colors.success : modelColors.glow}
+                borderColor={!isInitialized ? colors.textSecondary : (assistantState === 'calling' ? colors.success : modelColors.primary)}
+                shadowColor={!isInitialized ? colors.textSecondary : (assistantState === 'calling' ? colors.success : modelColors.glow)}
               />
 
               {assistantState === 'speaking' && (

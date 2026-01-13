@@ -14,7 +14,7 @@ import {
 import { useTheme } from '@/hooks/useTheme';
 
 export interface AdFallbackProps {
-  adType: 'banner' | 'interstitial';
+  adType: 'banner' | 'interstitial' | 'rewarded';
   errorMessage?: string;
   onRetry?: () => void;
   onDismiss?: () => void;

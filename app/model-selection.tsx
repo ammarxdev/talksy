@@ -25,19 +25,15 @@ import { ModelCard } from '@/components/model/ModelCard';
 import { ModelPreviewModal } from '@/components/model/ModelPreviewModal';
 import { AVAILABLE_MODELS } from '@/types/models';
 
-import { useVoiceAssistantContext } from '@/components/VoiceAssistantProviderWrapper';
-
 export default function ModelSelectionScreen() {
   const { colors, colorScheme } = useTheme();
   const { selectedModel, setSelectedModel, isLoading: modelLoading, error } = useModel();
   const { showSuccess, showError } = useAlert();
-  const { startConversation, assistantState } = useVoiceAssistantContext();
 
   // Local state
   const [refreshing, setRefreshing] = useState(false);
   const [previewModelId, setPreviewModelId] = useState<string | null>(null);
   const [isChangingModel, setIsChangingModel] = useState(false);
-  const [isStartingCall, setIsStartingCall] = useState(false);
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -60,48 +56,32 @@ export default function ModelSelectionScreen() {
     ]).start();
   }, []);
 
-  // Handle model selection - now starts realtime call immediately
+  // Handle model selection - ONLY updates model state, does NOT start call
+  // Call should only be initiated by explicit avatar tap on home screen
   const handleModelSelect = async (modelId: string) => {
-    // Prevent selection if already changing model or call is active
-    if (isChangingModel || isStartingCall || assistantState !== 'idle') {
-      console.log('Model selection blocked - state:', { isChangingModel, isStartingCall, assistantState });
+    // Prevent selection if already changing model
+    if (isChangingModel) {
+      console.log('Model selection blocked - already changing model');
       return;
     }
 
     try {
       setIsChangingModel(true);
-      setIsStartingCall(true);
 
-      // First, update the selected model
+      // Update the selected model state only
       const success = await setSelectedModel(modelId as any);
 
       if (success) {
         // Show success message
         showSuccess(
-          'Model selected! Starting realtime call...',
+          'Model updated successfully! Tap the avatar on the home screen to start a conversation.',
           'Model Updated'
         );
 
-        // Start realtime call with Grok
-        try {
-          await startConversation();
-
-          // Navigate back after call starts
-          setTimeout(() => {
-            router.back();
-          }, 300);
-        } catch (callError) {
-          console.error('Failed to start realtime call:', callError);
-          showError(
-            'Model updated but failed to start realtime call. Please try again from the main screen.',
-            'Call Start Failed'
-          );
-
-          // Still navigate back
-          setTimeout(() => {
-            router.back();
-          }, 500);
-        }
+        // Navigate back to home screen
+        setTimeout(() => {
+          router.back();
+        }, 300);
       } else {
         showError(
           'Failed to update your model selection. Please try again.',
@@ -116,7 +96,6 @@ export default function ModelSelectionScreen() {
       );
     } finally {
       setIsChangingModel(false);
-      setIsStartingCall(false);
     }
   };
 

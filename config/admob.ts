@@ -37,31 +37,42 @@ export const TEST_AD_UNIT_IDS = {
 } as const;
 
 // Production ad unit IDs - replace these with your real AdMob ad unit IDs
+// IMPORTANT: You need to create these ad units in your AdMob console
+// For iOS: Go to AdMob Console -> Apps -> Your iOS App -> Ad units -> Create ad unit
+// Format: ca-app-pub-XXXXXXXXXXXXXXXX/XXXXXXXXXX
 export const PRODUCTION_AD_UNIT_IDS = {
   BANNER: Platform.select({
-    ios: 'ca-app-pub-YOUR_PUBLISHER_ID/YOUR_IOS_BANNER_ID',
+    // TODO: Replace with your iOS Banner Ad Unit ID from AdMob
+    ios: 'ca-app-pub-5419600451955416/REPLACE_WITH_IOS_BANNER_ID',
     android: 'ca-app-pub-5419600451955416/6835072247',
     default: 'ca-app-pub-5419600451955416/6835072247',
   }),
   INTERSTITIAL: Platform.select({
-    ios: 'ca-app-pub-YOUR_PUBLISHER_ID/YOUR_IOS_INTERSTITIAL_ID',
+    // TODO: Replace with your iOS Interstitial Ad Unit ID from AdMob
+    ios: 'ca-app-pub-5419600451955416/REPLACE_WITH_IOS_INTERSTITIAL_ID',
     android: 'ca-app-pub-5419600451955416/1262363124',
     default: 'ca-app-pub-5419600451955416/1262363124',
   }),
   REWARDED: Platform.select({
-    ios: 'ca-app-pub-YOUR_PUBLISHER_ID/YOUR_IOS_REWARDED_ID',
-    android: 'ca-app-pub-YOUR_PUBLISHER_ID/YOUR_ANDROID_REWARDED_ID',
-    default: 'ca-app-pub-YOUR_PUBLISHER_ID/YOUR_ANDROID_REWARDED_ID',
+    // TODO: Replace with your iOS Rewarded Ad Unit ID from AdMob
+    ios: process.env.EXPO_PUBLIC_REWARDED_AD_UNIT_ID_IOS || 'ca-app-pub-3940256099942544/1712485313',  // Test ID as fallback
+    // TODO: Replace with your Android Rewarded Ad Unit ID from AdMob
+    android: process.env.EXPO_PUBLIC_REWARDED_AD_UNIT_ID_ANDROID || 'ca-app-pub-3940256099942544/5224354917',  // Test ID as fallback
+    default: 'ca-app-pub-3940256099942544/5224354917',
   }),
   APP_OPEN: Platform.select({
-    ios: 'ca-app-pub-YOUR_PUBLISHER_ID/YOUR_IOS_APP_OPEN_ID',
-    android: 'ca-app-pub-YOUR_PUBLISHER_ID/YOUR_ANDROID_APP_OPEN_ID',
-    default: 'ca-app-pub-YOUR_PUBLISHER_ID/YOUR_ANDROID_APP_OPEN_ID',
+    // TODO: Replace with your iOS App Open Ad Unit ID from AdMob
+    ios: 'ca-app-pub-5419600451955416/REPLACE_WITH_IOS_APP_OPEN_ID',
+    // TODO: Replace with your Android App Open Ad Unit ID from AdMob
+    android: 'ca-app-pub-5419600451955416/REPLACE_WITH_ANDROID_APP_OPEN_ID',
+    default: 'ca-app-pub-5419600451955416/REPLACE_WITH_ANDROID_APP_OPEN_ID',
   }),
   NATIVE: Platform.select({
-    ios: 'ca-app-pub-YOUR_PUBLISHER_ID/YOUR_IOS_NATIVE_ID',
-    android: 'ca-app-pub-YOUR_PUBLISHER_ID/YOUR_ANDROID_NATIVE_ID',
-    default: 'ca-app-pub-YOUR_PUBLISHER_ID/YOUR_ANDROID_NATIVE_ID',
+    // TODO: Replace with your iOS Native Ad Unit ID from AdMob
+    ios: 'ca-app-pub-5419600451955416/REPLACE_WITH_IOS_NATIVE_ID',
+    // TODO: Replace with your Android Native Ad Unit ID from AdMob
+    android: 'ca-app-pub-5419600451955416/REPLACE_WITH_ANDROID_NATIVE_ID',
+    default: 'ca-app-pub-5419600451955416/REPLACE_WITH_ANDROID_NATIVE_ID',
   }),
 } as const;
 

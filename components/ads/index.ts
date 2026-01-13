@@ -14,4 +14,5 @@ export { AdMobTestSuite } from './AdMobTestSuite';
 
 // Future exports for other ad types
 // export { RewardedAd } from './RewardedAd';
+export { RewardedAd } from './RewardedAd';
 // export { NativeAd } from './NativeAd';

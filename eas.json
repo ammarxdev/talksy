@@ -27,7 +27,6 @@
         "simulator": false
       },
       "env": {
-        "NODE_ENV": "production",
         "EXPO_PUBLIC_USE_REAL_ADS": "false",
         "EXPO_PUBLIC_SUPABASE_URL": "https://tqkygmcsiillcrswdaja.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxa3lnbWNzaWlsbGNyc3dkYWphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcwMDI3NzcsImV4cCI6MjA4MjU3ODc3N30.07yPXZ6S1yRBEFch1P-Jr5du4-bATwamRRUkYmP9ThA",

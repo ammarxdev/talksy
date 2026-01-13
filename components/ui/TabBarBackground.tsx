@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, StyleSheet, Dimensions, Platform, TouchableOpacity, Text, Animated } from 'react-native';
+import React, { useRef, useCallback } from 'react';
+import { View, StyleSheet, Dimensions, Platform, TouchableOpacity, Text, Animated, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useModelTheme } from '@/hooks/useModelTheme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +16,12 @@ export default function TabBarBackground(props: BottomTabBarProps) {
   const isDark = colorScheme === 'dark';
 
   // Voice assistant context for call end button functionality
-  const { assistantState, showEndCallButton, stopConversation } = useVoiceAssistantContext();
+  const { assistantState, showEndCallButton, stopConversation, isInitialized } = useVoiceAssistantContext();
+
+  // Debounce state to prevent multiple rapid taps
+  const [isProcessingTap, setIsProcessingTap] = React.useState(false);
+  const lastTapTimeRef = useRef<number>(0);
+  const DEBOUNCE_DELAY = 300; // 300ms debounce
 
   // Animation for call end button
   const callEndButtonScale = React.useRef(new Animated.Value(1)).current;
@@ -69,27 +74,53 @@ export default function TabBarBackground(props: BottomTabBarProps) {
     { key: 'profile', name: 'Profile', icon: 'person.fill' as const },
   ];
 
-  const handleTabPress = (tabKey: string) => {
-    if (Platform.OS === 'ios') {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  const handleTabPress = useCallback((tabKey: string) => {
+    // Debounce rapid taps to prevent intermittent failures
+    const now = Date.now();
+    if (now - lastTapTimeRef.current < DEBOUNCE_DELAY) {
+      console.log('Tab press debounced - too rapid');
+      return;
     }
+    lastTapTimeRef.current = now;
 
-    const route = props.state.routes.find((r) => r.name === tabKey);
-    if (!route) {
+    // Prevent processing if already handling a tap
+    if (isProcessingTap) {
+      console.log('Tab press ignored - already processing');
       return;
     }
 
-    const isFocused = props.state.index === props.state.routes.indexOf(route);
-    const event = props.navigation.emit({
-      type: 'tabPress',
-      target: route.key,
-      canPreventDefault: true,
-    });
+    setIsProcessingTap(true);
 
-    if (!isFocused && !event.defaultPrevented) {
-      props.navigation.navigate(route.name as any);
+    try {
+      if (Platform.OS === 'ios') {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+
+      const route = props.state.routes.find((r) => r.name === tabKey);
+      if (!route) {
+        setIsProcessingTap(false);
+        return;
+      }
+
+      const isFocused = props.state.index === props.state.routes.indexOf(route);
+      const event = props.navigation.emit({
+        type: 'tabPress',
+        target: route.key,
+        canPreventDefault: true,
+      });
+
+      if (!isFocused && !event.defaultPrevented) {
+        props.navigation.navigate(route.name as any);
+      }
+    } catch (error) {
+      console.error('Error handling tab press:', error);
+    } finally {
+      // Reset processing state after a short delay
+      setTimeout(() => {
+        setIsProcessingTap(false);
+      }, 100);
     }
-  };
+  }, [isProcessingTap, props.state.routes, props.state.index, props.navigation]);
 
   const handleEndCall = async () => {
     // Provide haptic feedback
@@ -195,12 +226,15 @@ export default function TabBarBackground(props: BottomTabBarProps) {
                     styles.tabButton,
                     {
                       backgroundColor: isActive ? `${iconColor}20` : 'transparent',
+                      opacity: isProcessingTap ? 0.7 : 1,
                     }
                   ]}
                   onPress={() => {
                     handleTabPress(tab.key);
                   }}
                   activeOpacity={0.7}
+                  disabled={isProcessingTap}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <IconSymbol
                     name={tab.icon}

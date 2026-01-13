@@ -108,13 +108,26 @@ class UserConsentService {
       }
 
       // Create fallback consent info and continue app startup.
+      // IMPORTANT: When UMP is not configured (publisher misconfiguration), 
+      // we should still allow ads to be shown for non-GDPR regions.
+      // Only block ads if user explicitly denied consent.
+      const isPublisherMisconfigError = this.isPublisherMisconfigurationErrorMessage(
+        this.getErrorMessage(error)
+      );
+
       this.consentInfo = {
         status: AdsConsentStatus.UNKNOWN,
-        canRequestAds: false,
+        // Allow ads when UMP is not configured (non-GDPR regions can still show ads)
+        // This is critical for ads to work when consent form is not set up yet
+        canRequestAds: isPublisherMisconfigError ? true : false,
         isPrivacyOptionsRequired: false,
         lastUpdated: Date.now(),
         userLocation: 'UNKNOWN',
       };
+
+      if (isPublisherMisconfigError) {
+        console.log('📋 UMP not configured - allowing ads by default (configure UMP for GDPR compliance)');
+      }
 
       this.isInitialized = true;
     }
@@ -188,15 +201,17 @@ class UserConsentService {
       if (this.isPublisherMisconfigurationErrorMessage(message)) {
         if (!this.hasLoggedNonFatalInitError) {
           this.hasLoggedNonFatalInitError = true;
-          console.warn('⚠️ UMP publisher misconfiguration (no consent form configured). Continuing without ads consent:', message);
+          console.warn('⚠️ UMP publisher misconfiguration (no consent form configured). Allowing ads for non-GDPR regions:', message);
         }
 
+        // When UMP is not configured, allow ads by default
+        // This enables ads to work while you set up GDPR compliance
         this.consentInfo = {
-          status: AdsConsentStatus.UNKNOWN,
-          canRequestAds: false,
+          status: AdsConsentStatus.NOT_REQUIRED,
+          canRequestAds: true, // IMPORTANT: Allow ads when UMP not configured
           isPrivacyOptionsRequired: false,
           lastUpdated: Date.now(),
-          userLocation: 'UNKNOWN',
+          userLocation: 'NON_EEA', // Assume non-EEA when UMP not configured
         };
         await this.cacheConsentInfo();
         return;

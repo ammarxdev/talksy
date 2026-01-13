@@ -113,9 +113,12 @@ export default {
       [
         "react-native-google-mobile-ads",
         {
-          // Production App IDs
+          // Production App IDs - IMPORTANT: Replace iOS App ID with your actual AdMob iOS App ID
           androidAppId: "ca-app-pub-5419600451955416~1147631295",
-          iosAppId: "ca-app-pub-3940256099942544~1458002511",
+          // TODO: Replace with your actual iOS App ID from AdMob console
+          // Format: ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX
+          // Get this from: https://admob.google.com/home/ -> Apps -> Add App (iOS)
+          iosAppId: "ca-app-pub-5419600451955416~REPLACE_WITH_IOS_APP_ID",
           // GDPR Compliance: Delay app measurement until consent is obtained
           delayAppMeasurementInit: true,
           // User tracking usage description for iOS App Tracking Transparency

@@ -1,19 +1,16 @@
 /**
- * Interstitial Ad Service
- * Manages full-screen interstitial ads with smart timing and frequency control
+ * Rewarded Ad Service
+ * Handles Google AdMob Rewarded Video Ads implementation
  */
 
-import { InterstitialAd, AdEventType, TestIds } from 'react-native-google-mobile-ads';
-import { adMobService } from './AdMobService';
+import { RewardedAd, AdEventType, RewardedAdEventType } from 'react-native-google-mobile-ads';
+import { AD_UNIT_IDS, AD_ERROR_MESSAGES } from '@/config/admob';
 import { adErrorHandler } from './AdErrorHandler';
+import { adMobService } from './AdMobService';
 import { adFrequencyManager } from '@/utils/adFrequencyManager';
-import { voiceSessionTracker } from '@/utils/voiceSessionTracker';
 import { networkMonitor } from '@/utils/networkMonitor';
-import { AD_UNIT_IDS, AD_ANALYTICS_EVENTS } from '@/config/admob';
 
-import type { AdLoadResult } from '@/types/admob';
-
-export interface InterstitialAdState {
+export interface RewardedAdState {
   isLoaded: boolean;
   isLoading: boolean;
   isShowing: boolean;
@@ -22,10 +19,21 @@ export interface InterstitialAdState {
   error: string | null;
 }
 
-class InterstitialAdService {
-  private static instance: InterstitialAdService;
-  private interstitialAd: InterstitialAd | null = null;
-  private state: InterstitialAdState = {
+export interface AdLoadResult {
+  success: boolean;
+  error?: string;
+  errorCode?: string;
+}
+
+export interface RewardedAdReward {
+  type: string;
+  amount: number;
+}
+
+class RewardedAdService {
+  private static instance: RewardedAdService;
+  private rewardedAd: RewardedAd | null = null;
+  private state: RewardedAdState = {
     isLoaded: false,
     isLoading: false,
     isShowing: false,
@@ -35,20 +43,23 @@ class InterstitialAdService {
   };
 
   private readonly MAX_LOAD_ATTEMPTS = 3;
-  private readonly PRELOAD_DELAY = 3000; // 3 seconds after app start (faster readiness)
+  private readonly PRELOAD_DELAY = 3000; // 3 seconds after app start
   private readonly RELOAD_DELAY = 20000; // 20 seconds between reload attempts
+
+  private onUserEarnedRewardCallback: ((reward: RewardedAdReward) => void) | null = null;
+  private onAdClosedCallback: (() => void) | null = null;
 
   private constructor() { }
 
-  static getInstance(): InterstitialAdService {
-    if (!InterstitialAdService.instance) {
-      InterstitialAdService.instance = new InterstitialAdService();
+  static getInstance(): RewardedAdService {
+    if (!RewardedAdService.instance) {
+      RewardedAdService.instance = new RewardedAdService();
     }
-    return InterstitialAdService.instance;
+    return RewardedAdService.instance;
   }
 
   /**
-   * Initialize the interstitial ad service
+   * Initialize the rewarded ad service
    */
   async initialize(): Promise<void> {
     if (!adMobService.isSDKInitialized()) {
@@ -61,11 +72,11 @@ class InterstitialAdService {
       this.preloadAd();
     }, this.PRELOAD_DELAY);
 
-    console.log('✅ Interstitial Ad Service initialized');
+    console.log('✅ Rewarded Ad Service initialized');
   }
 
   /**
-   * Preload an interstitial ad with enhanced error handling
+   * Preload a rewarded ad with enhanced error handling
    */
   async preloadAd(testMode: boolean = false): Promise<AdLoadResult> {
     if (this.state.isLoading || this.state.isLoaded) {
@@ -99,10 +110,10 @@ class InterstitialAdService {
     this.state.loadAttempts += 1;
 
     try {
-      const adUnitId = testMode ? 'ca-app-pub-3940256099942544/4411468910' : AD_UNIT_IDS.INTERSTITIAL;
+      const adUnitId = testMode ? 'ca-app-pub-3940256099942544/1712485313' : AD_UNIT_IDS.REWARDED;
 
-      // Create new interstitial ad
-      this.interstitialAd = InterstitialAd.createForAdRequest(adUnitId, {
+      // Create new rewarded ad
+      this.rewardedAd = RewardedAd.createForAdRequest(adUnitId, {
         requestNonPersonalizedAdsOnly: false,
       });
 
@@ -110,9 +121,9 @@ class InterstitialAdService {
       this.setupEventListeners();
 
       // Load the ad with timeout
-      console.log('🔄 Loading interstitial ad...');
+      console.log('🔄 Loading rewarded ad...');
       await Promise.race([
-        this.interstitialAd.load(),
+        this.rewardedAd.load(),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Ad load timeout')), 30000)
         )
@@ -123,30 +134,30 @@ class InterstitialAdService {
       this.state.lastLoadTime = Date.now();
 
       // Log analytics
-      adMobService.logAdEvent(AD_ANALYTICS_EVENTS.AD_LOADED, 'interstitial', {
+      adMobService.logAdEvent('ad_loaded', 'rewarded', {
         ad_unit_id: adUnitId,
         load_attempts: this.state.loadAttempts,
         network_type: networkMonitor.getState().type,
         network_strength: networkMonitor.getState().strength,
       });
 
-      console.log('✅ Interstitial ad loaded successfully');
+      console.log('✅ Rewarded ad loaded successfully');
       return { success: true };
 
     } catch (error) {
       this.state.isLoading = false;
 
       // Use enhanced error handler
-      const errorInfo = adErrorHandler.handleError(error, 'interstitial', testMode ? 'ca-app-pub-3940256099942544/4411468910' : AD_UNIT_IDS.INTERSTITIAL);
+      const errorInfo = adErrorHandler.handleError(error, 'rewarded', testMode ? 'ca-app-pub-3940256099942544/1712485313' : AD_UNIT_IDS.REWARDED);
       this.state.error = errorInfo.userFriendlyMessage;
 
-      console.error('❌ Failed to load interstitial ad:', error);
+      console.error('❌ Failed to load rewarded ad:', error);
 
       // Schedule auto-retry if recommended
       if (errorInfo.shouldRetry && this.state.loadAttempts < this.MAX_LOAD_ATTEMPTS) {
         setTimeout(() => {
           if (!this.state.isLoaded && !this.state.isLoading) {
-            console.log(`🔄 Auto-retrying interstitial ad (attempt ${this.state.loadAttempts + 1})`);
+            console.log(`🔄 Auto-retrying rewarded ad (attempt ${this.state.loadAttempts + 1})`);
             this.preloadAd(testMode);
           }
         }, errorInfo.retryDelay || this.RELOAD_DELAY);
@@ -161,48 +172,65 @@ class InterstitialAdService {
   }
 
   /**
-   * Set up event listeners for the interstitial ad
+   * Set up event listeners for the rewarded ad
    */
   private setupEventListeners(): void {
-    if (!this.interstitialAd) return;
+    if (!this.rewardedAd) return;
 
-    this.interstitialAd.addAdEventListener(AdEventType.LOADED, () => {
-      console.log('📱 Interstitial ad loaded event');
+    this.rewardedAd.addAdEventListener(AdEventType.LOADED, () => {
+      console.log('📱 Rewarded ad loaded event');
     });
 
-    this.interstitialAd.addAdEventListener(AdEventType.OPENED, () => {
-      console.log('👁️ Interstitial ad opened');
+    this.rewardedAd.addAdEventListener(AdEventType.OPENED, () => {
+      console.log('👁️ Rewarded ad opened');
       this.state.isShowing = true;
 
-      adMobService.logAdEvent(AD_ANALYTICS_EVENTS.AD_OPENED, 'interstitial');
+      adMobService.logAdEvent('ad_opened', 'rewarded');
     });
 
-    this.interstitialAd.addAdEventListener(AdEventType.CLOSED, () => {
-      console.log('❌ Interstitial ad closed');
+    this.rewardedAd.addAdEventListener(AdEventType.CLOSED, () => {
+      console.log('❌ Rewarded ad closed');
       this.state.isShowing = false;
       this.state.isLoaded = false;
 
       // Record that ad was shown for frequency management
-      adFrequencyManager.recordInterstitialShown();
-      // Reset voice-session-based session counter and randomize next threshold (2-3)
-      voiceSessionTracker.onInterstitialAdShown?.();
+      adFrequencyManager.recordInterstitialShown(); // Using same counter for rewarded ads
 
       // Preload next ad
       setTimeout(() => {
         this.preloadAd();
       }, 2000);
 
-      adMobService.logAdEvent(AD_ANALYTICS_EVENTS.AD_CLOSED, 'interstitial');
+      // Call the closed callback if available
+      if (this.onAdClosedCallback) {
+        this.onAdClosedCallback();
+      }
+
+      adMobService.logAdEvent('ad_closed', 'rewarded');
     });
 
-    this.interstitialAd.addAdEventListener(AdEventType.CLICKED, () => {
-      console.log('👆 Interstitial ad clicked');
-      adMobService.logAdEvent(AD_ANALYTICS_EVENTS.AD_CLICKED, 'interstitial');
+    this.rewardedAd.addAdEventListener(AdEventType.CLICKED, () => {
+      console.log('👆 Rewarded ad clicked');
+      adMobService.logAdEvent('ad_clicked', 'rewarded');
+    });
+
+    this.rewardedAd.addAdEventListener(RewardedAdEventType.EARNED_REWARD, (rewardInfo) => {
+      console.log('💰 User earned reward:', rewardInfo);
+      
+      // Call the reward callback if available
+      if (this.onUserEarnedRewardCallback) {
+        this.onUserEarnedRewardCallback(rewardInfo as RewardedAdReward);
+      }
+
+      adMobService.logAdEvent('ad_rewarded', 'rewarded', {
+        reward_type: rewardInfo.type,
+        reward_amount: rewardInfo.amount,
+      });
     });
   }
 
   /**
-   * Show the interstitial ad if conditions are met with enhanced error handling
+   * Show the rewarded ad if conditions are met with enhanced error handling
    */
   async showAd(): Promise<{ success: boolean; reason?: string }> {
     try {
@@ -223,22 +251,17 @@ class InterstitialAdService {
       }
 
       // Check if ad is loaded
-      if (!this.state.isLoaded || !this.interstitialAd) {
-        console.log('⚠️ Interstitial ad not loaded, attempting to load...');
+      if (!this.state.isLoaded || !this.rewardedAd) {
+        console.log('⚠️ Rewarded ad not loaded, attempting to load...');
         const loadResult = await this.preloadAd();
         if (!loadResult.success) {
           return { success: false, reason: loadResult.error || 'Failed to load ad' };
         }
 
-        // Wait for the ad to be fully ready - increase wait time and verify state
-        let attempts = 0;
-        const maxAttempts = 10; // 5 seconds total
-        while (attempts < maxAttempts && (!this.state.isLoaded || !this.interstitialAd)) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          attempts++;
-        }
+        // Wait a moment for the ad to be ready
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-        if (!this.state.isLoaded || !this.interstitialAd) {
+        if (!this.state.isLoaded || !this.rewardedAd) {
           return { success: false, reason: 'Ad still not ready after loading' };
         }
       }
@@ -248,26 +271,17 @@ class InterstitialAdService {
         return { success: false, reason: 'Ad is already showing' };
       }
 
-      console.log('🎬 Showing interstitial ad...');
-
-      // Add a small delay to ensure ad is fully ready (addresses the race condition)
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      // Verify the ad is still loaded before attempting to show
-      if (!this.state.isLoaded || !this.interstitialAd) {
-        console.log('⚠️ Ad became unavailable before showing');
-        return { success: false, reason: 'Ad became unavailable before showing' };
-      }
+      console.log('🎬 Showing rewarded ad...');
 
       // Show with timeout protection
       await Promise.race([
-        this.interstitialAd!.show(),
+        this.rewardedAd!.show(),
         new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Ad show timeout')), 10000)
         )
       ]);
 
-      adMobService.logAdEvent(AD_ANALYTICS_EVENTS.AD_IMPRESSION, 'interstitial', {
+      adMobService.logAdEvent('ad_impression', 'rewarded', {
         network_type: networkMonitor.getState().type,
         network_strength: networkMonitor.getState().strength,
         load_attempts: this.state.loadAttempts,
@@ -276,34 +290,20 @@ class InterstitialAdService {
       return { success: true };
 
     } catch (error) {
-      console.error('❌ Failed to show interstitial ad:', error);
+      console.error('❌ Failed to show rewarded ad:', error);
 
       // Use enhanced error handler
-      const errorInfo = adErrorHandler.handleError(error, 'interstitial', AD_UNIT_IDS.INTERSTITIAL);
+      const errorInfo = adErrorHandler.handleError(error, 'rewarded', AD_UNIT_IDS.REWARDED);
 
       // Reset state if show failed
       this.state.isShowing = false;
-
-      // If the ad failed to show, mark it as not loaded so it will be reloaded
-      if (this.state.isLoaded) {
-        this.state.isLoaded = false;
-      }
 
       return { success: false, reason: errorInfo.userFriendlyMessage };
     }
   }
 
   /**
-   * Check if an interstitial ad is ready to be shown immediately
-   * This is more strict than just checking if it's loaded, as it verifies
-   * the ad is in a state where show() will succeed
-   */
-  isReadyToShow(): boolean {
-    return this.state.isLoaded && !this.state.isShowing && this.interstitialAd !== null;
-  }
-
-  /**
-   * Check if an interstitial ad can be shown
+   * Check if a rewarded ad can be shown
    */
   canShowAd(): { canShow: boolean; reason?: string } {
     if (!adMobService.isSDKInitialized()) {
@@ -322,18 +322,28 @@ class InterstitialAdService {
       return { canShow: false, reason: 'Ad already showing' };
     }
 
-    if (!this.interstitialAd) {
-      return { canShow: false, reason: 'Ad instance not available' };
-    }
-
     return { canShow: true };
   }
 
   /**
    * Get current ad state
    */
-  getState(): InterstitialAdState {
+  getState(): RewardedAdState {
     return { ...this.state };
+  }
+
+  /**
+   * Set callback for when user earns reward
+   */
+  setOnUserEarnedReward(callback: (reward: RewardedAdReward) => void): void {
+    this.onUserEarnedRewardCallback = callback;
+  }
+
+  /**
+   * Set callback for when ad is closed
+   */
+  setOnAdClosed(callback: () => void): void {
+    this.onAdClosedCallback = callback;
   }
 
   /**
@@ -352,9 +362,9 @@ class InterstitialAdService {
    * Clean up resources
    */
   destroy(): void {
-    if (this.interstitialAd) {
+    if (this.rewardedAd) {
       // Remove event listeners and clean up
-      this.interstitialAd = null;
+      this.rewardedAd = null;
     }
 
     this.state = {
@@ -366,10 +376,10 @@ class InterstitialAdService {
       error: null,
     };
 
-    console.log('🗑️ Interstitial Ad Service destroyed');
+    console.log('🗑️ Rewarded Ad Service destroyed');
   }
 }
 
 // Export singleton instance
-export const interstitialAdService = InterstitialAdService.getInstance();
-export default interstitialAdService;
+export const rewardedAdService = RewardedAdService.getInstance();
+export default rewardedAdService;
