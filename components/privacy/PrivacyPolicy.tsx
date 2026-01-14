@@ -123,7 +123,7 @@ export function PrivacyPolicy() {
             Your Rights (GDPR & CCPA)
           </Text>
           <Text style={[styles.sectionText, { color: colors.textSecondary }]}>
-            If you're in the EU or California, you have additional rights:
+            If you&apos;re in the EU or California, you have additional rights:
           </Text>
           <Text style={[styles.bulletPoint, { color: colors.textSecondary }]}>
             • Right to access your personal data
@@ -132,7 +132,7 @@ export function PrivacyPolicy() {
             • Right to delete your personal data
           </Text>
           <Text style={[styles.bulletPoint, { color: colors.textSecondary }]}>
-            • Right to opt out of data sales (we don't sell data)
+            • Right to opt out of data sales (we don&apos;t sell data)
           </Text>
           <Text style={[styles.bulletPoint, { color: colors.textSecondary }]}>
             • Right to manage ad personalization
@@ -196,7 +196,7 @@ export function PrivacyPolicy() {
         <View style={styles.footer}>
           <Text style={[styles.footerText, { color: colors.textSecondary }]}>
             For questions about this privacy policy or to exercise your privacy rights, 
-            please contact us through the app's support section.
+            please contact us through the app&apos;s support section.
           </Text>
         </View>
       </View>

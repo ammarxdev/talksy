@@ -45,6 +45,7 @@
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRxa3lnbWNzaWlsbGNyc3dkYWphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjcwMDI3NzcsImV4cCI6MjA4MjU3ODc3N30.07yPXZ6S1yRBEFch1P-Jr5du4-bATwamRRUkYmP9ThA",
         "OPENWEATHER_API_KEY": "9c913bd34f278338c7008ffb74069a86"
       }
+      
     }
   },
   "submit": {

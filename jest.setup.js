@@ -1,4 +1,4 @@
-// Mock React Native modules
+n// Mock React Native modules
 jest.mock('react-native', () => ({
   Platform: {
     OS: 'ios',

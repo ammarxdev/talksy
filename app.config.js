@@ -3,7 +3,8 @@ import 'dotenv/config';
 export default {
   expo: {
     name: "Talksy",
-    slug: "VoiceAssistent",
+    slug: "voiceassistent",
+    owner: "ammarxsaeed",
     version: "1.0.0",
     orientation: "portrait",
     icon: "./assets/images/icon.png",
@@ -18,7 +19,6 @@ export default {
       bundleIdentifier: "com.bytebrewtechnologies.voiceassistent",
       infoPlist: {
         NSMicrophoneUsageDescription: "This app uses the microphone for voice recognition and real-time audio level monitoring to provide a seamless voice assistant experience.",
-
         NSContactsUsageDescription: "This app accesses your contacts to help you make calls through voice commands.",
         NSUserTrackingUsageDescription: "This identifier will be used to deliver personalized ads to you and improve your app experience."
       }
@@ -65,7 +65,9 @@ export default {
         {
           android: {
             // ProGuard rules for UMP SDK (GDPR compliance)
-            extraProguardRules: "-keep class com.google.android.gms.internal.consent_sdk.** { *; }"
+            extraProguardRules: "-keep class com.google.android.gms.internal.consent_sdk.** { *; }",
+            // ❗️this removes the JFrog repo that expo-dev-client adds
+            extraMavenRepos: []
           }
         }
       ],
@@ -103,7 +105,6 @@ export default {
           microphonePermission: "The app accesses your microphone for video recording (if needed)."
         }
       ],
-
       [
         "expo-contacts",
         {
@@ -117,7 +118,7 @@ export default {
           androidAppId: "ca-app-pub-5419600451955416~1147631295",
           // TODO: Replace with your actual iOS App ID from AdMob console
           // Format: ca-app-pub-XXXXXXXXXXXXXXXX~XXXXXXXXXX
-          // Get this from: https://admob.google.com/home/ -> Apps -> Add App (iOS)
+          // Get this from: https://admob.google.com/home/  -> Apps -> Add App (iOS)
           iosAppId: "ca-app-pub-5419600451955416~REPLACE_WITH_IOS_APP_ID",
           // GDPR Compliance: Delay app measurement until consent is obtained
           delayAppMeasurementInit: true,
@@ -188,7 +189,7 @@ export default {
       EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
       EXPO_PUBLIC_GOOGLE_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
       eas: {
-        projectId: "b6138f52-f6b1-4b67-99fc-011b3a54a28d"
+        projectId: "92a82703-2b43-4480-aed4-4ccfb9ee34d0"
       }
     }
   }

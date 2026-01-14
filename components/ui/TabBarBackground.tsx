@@ -1,27 +1,43 @@
-import React, { useRef, useCallback } from 'react';
-import { View, StyleSheet, Dimensions, Platform, TouchableOpacity, Text, Animated, ActivityIndicator } from 'react-native';
+import React, { useRef, useCallback, useEffect, useState } from 'react';
+import { View, StyleSheet, Platform, TouchableOpacity, Text, Animated, InteractionManager } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useModelTheme } from '@/hooks/useModelTheme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { CommonActions, TabActions } from '@react-navigation/native';
+import { router } from 'expo-router';
 import { IconSymbol } from './IconSymbol';
 import * as Haptics from 'expo-haptics';
 import { useVoiceAssistantContext } from '@/components/VoiceAssistantProviderWrapper';
 
-const { width } = Dimensions.get('window');
+
 
 export default function TabBarBackground(props: BottomTabBarProps) {
   const { modelColors, colorScheme, baseColors } = useModelTheme();
   const insets = useSafeAreaInsets();
   const isDark = colorScheme === 'dark';
 
+  const BUILD_MARKER = 'TABBAR_PROFILE_NAV_FIX_2026_01_13_C';
+
+  // Track if navigation is ready (first mount delay)
+  const [isNavigationReady, setIsNavigationReady] = useState(false);
+  const navigationReadyRef = useRef(false);
+  const mountedRef = useRef(false);
+
+  // Force re-render trigger for navigation
+  const [, forceUpdate] = useState(0);
+
   // Voice assistant context for call end button functionality
-  const { assistantState, showEndCallButton, stopConversation, isInitialized } = useVoiceAssistantContext();
+  const { assistantState, showEndCallButton, stopConversation } = useVoiceAssistantContext();
 
   // Debounce state to prevent multiple rapid taps
   const [isProcessingTap, setIsProcessingTap] = React.useState(false);
   const lastTapTimeRef = useRef<number>(0);
+  const navStateRef = useRef(props.state);
+  const pendingTabKeyRef = useRef<{ tabKey: string; attempts: number; startedAt: number } | null>(null);
   const DEBOUNCE_DELAY = 300; // 300ms debounce
+  const MAX_NAVIGATION_ATTEMPTS = 200;
+  const MAX_NAVIGATION_DURATION_MS = 5000;
 
   // Animation for call end button
   const callEndButtonScale = React.useRef(new Animated.Value(1)).current;
@@ -74,18 +90,179 @@ export default function TabBarBackground(props: BottomTabBarProps) {
     { key: 'profile', name: 'Profile', icon: 'person.fill' as const },
   ];
 
+  React.useEffect(() => {
+    navStateRef.current = props.state;
+  }, [props.state]);
+
+  // Initialize navigation readiness after mount with proper delay
+  useEffect(() => {
+    mountedRef.current = true;
+
+    // Use InteractionManager to wait for all interactions to complete
+    const interactionHandle = InteractionManager.runAfterInteractions(() => {
+      // Additional delay to ensure expo-router is fully initialized
+      const timer = setTimeout(() => {
+        if (mountedRef.current) {
+          navigationReadyRef.current = true;
+          setIsNavigationReady(true);
+          console.log(`[${BUILD_MARKER}] navigation_ready`);
+        }
+      }, 500);
+
+      return () => clearTimeout(timer);
+    });
+
+    return () => {
+      mountedRef.current = false;
+      interactionHandle.cancel();
+    };
+  }, []);
+
+  React.useEffect(() => {
+    console.log(`[${BUILD_MARKER}] mounted`);
+  }, []);
+
+  const isTabFocused = useCallback((tabKey: string) => {
+    const state = navStateRef.current;
+    const idx = state?.index ?? 0;
+    const currentName = state?.routes?.[idx]?.name;
+    return currentName === tabKey;
+  }, []);
+
+  const attemptNavigateToTab = useCallback((tabKey: string) => {
+    if (isTabFocused(tabKey)) {
+      pendingTabKeyRef.current = null;
+      return;
+    }
+
+    const pending = pendingTabKeyRef.current;
+    if (pending && Date.now() - pending.startedAt > MAX_NAVIGATION_DURATION_MS) {
+      pendingTabKeyRef.current = null;
+      return;
+    }
+    if (pending && pending.attempts >= MAX_NAVIGATION_ATTEMPTS) {
+      pendingTabKeyRef.current = null;
+      return;
+    }
+
+    const state = navStateRef.current;
+    const targetKey = state?.key;
+    const resetRoutes = (state?.routes?.map((r) => ({ name: r.name as any })) ?? [
+      { name: 'index' as any },
+      { name: 'profile' as any },
+    ]);
+    const resetIndex = Math.max(0, resetRoutes.findIndex((r) => r.name === (tabKey as any)));
+
+    try {
+      props.navigation.navigate(tabKey as any);
+    } catch (e) {
+      console.error(`[${BUILD_MARKER}] navigation.navigate failed:`, e);
+    }
+
+    try {
+      props.navigation.dispatch(CommonActions.navigate({ name: tabKey as any } as any));
+    } catch (e) {
+      console.error(`[${BUILD_MARKER}] CommonActions.navigate dispatch failed:`, e);
+    }
+
+    try {
+      props.navigation.dispatch(TabActions.jumpTo(tabKey as any));
+    } catch (e) {
+      console.error(`[${BUILD_MARKER}] TabActions.jumpTo dispatch failed:`, e);
+    }
+
+    try {
+      (props.navigation as any).jumpTo?.(tabKey);
+    } catch (e) {
+      console.error(`[${BUILD_MARKER}] navigation.jumpTo failed:`, e);
+    }
+
+    if (targetKey) {
+      try {
+        props.navigation.dispatch({
+          ...TabActions.jumpTo(tabKey as any),
+          target: targetKey,
+        } as any);
+      } catch (e) {
+        console.error(`[${BUILD_MARKER}] TabActions.jumpTo(target) dispatch failed:`, e);
+      }
+
+      try {
+        props.navigation.dispatch({
+          ...CommonActions.navigate({ name: tabKey as any } as any),
+          target: targetKey,
+        } as any);
+      } catch (e) {
+        console.error(`[${BUILD_MARKER}] CommonActions.navigate(target) dispatch failed:`, e);
+      }
+
+      if (pending && pending.attempts > 0 && pending.attempts % 5 === 0) {
+        try {
+          props.navigation.dispatch({
+            ...CommonActions.reset({
+              index: resetIndex,
+              routes: resetRoutes,
+            }),
+            target: targetKey,
+          } as any);
+        } catch (e) {
+          console.error(`[${BUILD_MARKER}] CommonActions.reset(target) dispatch failed:`, e);
+        }
+      }
+    }
+
+    const current = pendingTabKeyRef.current;
+    const nextAttempts = (current?.attempts ?? 0) + 1;
+    pendingTabKeyRef.current = {
+      tabKey,
+      attempts: nextAttempts,
+      startedAt: current?.startedAt ?? Date.now(),
+    };
+
+    setTimeout(() => {
+      const stillPending = pendingTabKeyRef.current;
+      if (!stillPending || stillPending.tabKey !== tabKey) return;
+      if (isTabFocused(tabKey)) {
+        pendingTabKeyRef.current = null;
+        return;
+      }
+      attemptNavigateToTab(tabKey);
+    }, 50);
+  }, [isTabFocused, props.navigation]);
+
+  React.useEffect(() => {
+    const pending = pendingTabKeyRef.current;
+    if (!pending) return;
+    if (isTabFocused(pending.tabKey)) {
+      pendingTabKeyRef.current = null;
+      return;
+    }
+    setTimeout(() => {
+      const stillPending = pendingTabKeyRef.current;
+      if (!stillPending) return;
+      attemptNavigateToTab(stillPending.tabKey);
+    }, 0);
+  }, [props.state, isTabFocused, attemptNavigateToTab]);
+
   const handleTabPress = useCallback((tabKey: string) => {
+    // PROFILE TAB: Immediate synchronous navigation - no async, no delays, no retries
+    if (tabKey === 'profile') {
+      if (Platform.OS === 'ios') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      router.navigate('/(tabs)/profile');
+      return;
+    }
+
+    // === NON-PROFILE TABS: Use existing debounced logic ===
+
     // Debounce rapid taps to prevent intermittent failures
     const now = Date.now();
     if (now - lastTapTimeRef.current < DEBOUNCE_DELAY) {
-      console.log('Tab press debounced - too rapid');
       return;
     }
     lastTapTimeRef.current = now;
 
     // Prevent processing if already handling a tap
     if (isProcessingTap) {
-      console.log('Tab press ignored - already processing');
       return;
     }
 
@@ -96,23 +273,10 @@ export default function TabBarBackground(props: BottomTabBarProps) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
 
-      const route = props.state.routes.find((r) => r.name === tabKey);
-      if (!route) {
-        setIsProcessingTap(false);
-        return;
-      }
-
-      const isFocused = props.state.index === props.state.routes.indexOf(route);
-      const event = props.navigation.emit({
-        type: 'tabPress',
-        target: route.key,
-        canPreventDefault: true,
-      });
-
-      if (!isFocused && !event.defaultPrevented) {
-        props.navigation.navigate(route.name as any);
-      }
+      pendingTabKeyRef.current = { tabKey, attempts: 0, startedAt: Date.now() };
+      attemptNavigateToTab(tabKey);
     } catch (error) {
+      pendingTabKeyRef.current = { tabKey, attempts: 0, startedAt: Date.now() };
       console.error('Error handling tab press:', error);
     } finally {
       // Reset processing state after a short delay
@@ -120,7 +284,7 @@ export default function TabBarBackground(props: BottomTabBarProps) {
         setIsProcessingTap(false);
       }, 100);
     }
-  }, [isProcessingTap, props.state.routes, props.state.index, props.navigation]);
+  }, [isProcessingTap, attemptNavigateToTab, props.state.routes, props.state.key, props.navigation]);
 
   const handleEndCall = async () => {
     // Provide haptic feedback
@@ -233,7 +397,7 @@ export default function TabBarBackground(props: BottomTabBarProps) {
                     handleTabPress(tab.key);
                   }}
                   activeOpacity={0.7}
-                  disabled={isProcessingTap}
+                  disabled={tab.key === 'profile' ? false : isProcessingTap}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <IconSymbol

@@ -21,9 +21,9 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { useProfile } from '@/hooks/useProfile';
 import { ProfilePicture } from '@/components/profile';
 import { useModel } from '@/contexts/ModelContext';
-// Removed bottom ProfileBanner to allow scrolling behind tab bar
 import { useAdMob } from '@/hooks/useAdMob';
 import { profileAdManager } from '@/utils/profileAdManager';
+import { AuthGuard } from '@/components/AuthGuard';
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
@@ -252,143 +252,145 @@ export default function ProfileScreen() {
   );
 
   return (
-    <SafeAreaView style={[styles.container, { backgroundColor: colors.surface }]} edges={['top']}>
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={{ paddingBottom: 8 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <ProfileHeader />
+    <AuthGuard requireAuth={true}>
+      <SafeAreaView style={[styles.container, { backgroundColor: colors.surface }]} edges={['top']}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={{ paddingBottom: 8 }}
+          showsVerticalScrollIndicator={false}
+        >
+          <ProfileHeader />
 
-        {/* Removed header inline ad to reduce ad density */}
+          {/* Removed header inline ad to reduce ad density */}
 
-        <SettingsSection title="Preferences">
-          <SettingsItem
-            icon="bell"
-            title="Notifications"
-            subtitle={getNotificationSubtitle()}
-            rightComponent={
-              notificationLoading ? (
-                <ActivityIndicator size="small" color="#667eea" />
-              ) : (
+          <SettingsSection title="Preferences">
+            <SettingsItem
+              icon="bell"
+              title="Notifications"
+              subtitle={getNotificationSubtitle()}
+              rightComponent={
+                notificationLoading ? (
+                  <ActivityIndicator size="small" color="#667eea" />
+                ) : (
+                  <Switch
+                    value={notificationSettings.enabled && serviceStatus.hasPermission}
+                    onValueChange={handleNotificationToggle}
+                    disabled={isNotificationSwitchDisabled()}
+                    trackColor={{ false: '#767577', true: '#667eea' }}
+                    thumbColor={
+                      (notificationSettings.enabled && serviceStatus.hasPermission)
+                        ? '#f4f3f4'
+                        : '#f4f3f4'
+                    }
+                  />
+                )
+              }
+              showArrow={false}
+              onPress={
+                notificationSettings.permissionStatus === 'denied'
+                  ? openNotificationSettings
+                  : undefined
+              }
+            />
+            <SettingsItem
+              icon="moon"
+              title={themeDisplayInfo.title}
+              subtitle={themeDisplayInfo.subtitle}
+              rightComponent={
                 <Switch
-                  value={notificationSettings.enabled && serviceStatus.hasPermission}
-                  onValueChange={handleNotificationToggle}
-                  disabled={isNotificationSwitchDisabled()}
-                  trackColor={{ false: '#767577', true: '#667eea' }}
-                  thumbColor={
-                    (notificationSettings.enabled && serviceStatus.hasPermission)
-                      ? '#f4f3f4'
-                      : '#f4f3f4'
-                  }
+                  value={themeDisplayInfo.value}
+                  onValueChange={toggleTheme}
+                  trackColor={{ false: '#767577', true: colors.primary }}
+                  thumbColor={themeDisplayInfo.value ? '#f4f3f4' : '#f4f3f4'}
                 />
-              )
-            }
-            showArrow={false}
-            onPress={
-              notificationSettings.permissionStatus === 'denied'
-                ? openNotificationSettings
-                : undefined
-            }
-          />
-          <SettingsItem
-            icon="moon"
-            title={themeDisplayInfo.title}
-            subtitle={themeDisplayInfo.subtitle}
-            rightComponent={
-              <Switch
-                value={themeDisplayInfo.value}
-                onValueChange={toggleTheme}
-                trackColor={{ false: '#767577', true: colors.primary }}
-                thumbColor={themeDisplayInfo.value ? '#f4f3f4' : '#f4f3f4'}
-              />
-            }
-            showArrow={false}
-            onPress={toggleTheme}
-          />
-          <SettingsItem
-            icon="person.2.fill"
-            title="Voice Assistant Model"
-            subtitle={getModelSelectionSubtitle()}
-            onPress={handleModelSelectionPress}
-            rightComponent={
-              modelLoading ? (
-                <ActivityIndicator size="small" color={colors.primary} />
-              ) : undefined
-            }
-          />
-          <SettingsItem
-            icon="hand.raised"
-            title="Privacy & Ads"
-            subtitle="Manage privacy preferences and ad settings"
-            onPress={() => {
-              router.push('/privacy-settings' as any);
-            }}
-          />
-        </SettingsSection>
+              }
+              showArrow={false}
+              onPress={toggleTheme}
+            />
+            <SettingsItem
+              icon="person.2.fill"
+              title="Voice Assistant Model"
+              subtitle={getModelSelectionSubtitle()}
+              onPress={handleModelSelectionPress}
+              rightComponent={
+                modelLoading ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : undefined
+              }
+            />
+            <SettingsItem
+              icon="hand.raised"
+              title="Privacy & Ads"
+              subtitle="Manage privacy preferences and ad settings"
+              onPress={() => {
+                router.push('/privacy-settings' as any);
+              }}
+            />
+          </SettingsSection>
 
-        <SettingsSection title="Support">
-          <SettingsItem
-            icon="questionmark.circle"
-            title="Help & FAQ"
-            subtitle="Get help and support"
-            onPress={() => {
-              router.push('/help-faq');
-            }}
-          />
-          <SettingsItem
-            icon="envelope"
-            title="Contact Us"
-            subtitle="Send feedback or report issues"
-            onPress={() => {
-              router.push('/contact-us');
-            }}
-          />
-          <SettingsItem
-            icon="star"
-            title="Rate App"
-            subtitle="Rate us on the app store"
-            onPress={() => {
-              // TODO: Open app store rating
-            }}
-          />
-        </SettingsSection>
+          <SettingsSection title="Support">
+            <SettingsItem
+              icon="questionmark.circle"
+              title="Help & FAQ"
+              subtitle="Get help and support"
+              onPress={() => {
+                router.push('/help-faq');
+              }}
+            />
+            <SettingsItem
+              icon="envelope"
+              title="Contact Us"
+              subtitle="Send feedback or report issues"
+              onPress={() => {
+                router.push('/contact-us');
+              }}
+            />
+            <SettingsItem
+              icon="star"
+              title="Rate App"
+              subtitle="Rate us on the app store"
+              onPress={() => {
+                // TODO: Open app store rating
+              }}
+            />
+          </SettingsSection>
 
-        {/* Removed middle inline ad to keep only bottom ad */}
+          {/* Removed middle inline ad to keep only bottom ad */}
 
-        <SettingsSection title="Account">
-          <SettingsItem
-            icon="person.circle"
-            title="Account Settings"
-            subtitle="Manage your account"
-            onPress={() => {
-              router.push('/account-settings');
-            }}
-          />
+          <SettingsSection title="Account">
+            <SettingsItem
+              icon="person.circle"
+              title="Account Settings"
+              subtitle="Manage your account"
+              onPress={() => {
+                router.push('/account-settings');
+              }}
+            />
 
-        </SettingsSection>
+          </SettingsSection>
 
-        <View style={styles.logoutSection}>
-          <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={handleLogout}
-            activeOpacity={0.8}
-          >
-            <IconSymbol name="arrow.right.square" size={20} color="#fff" />
-            <Text style={styles.logoutButtonText}>Logout</Text>
-          </TouchableOpacity>
-        </View>
+          <View style={styles.logoutSection}>
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleLogout}
+              activeOpacity={0.8}
+            >
+              <IconSymbol name="arrow.right.square" size={20} color="#fff" />
+              <Text style={styles.logoutButtonText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
 
-        <View style={styles.footer}>
-          <ThemedText style={styles.footerText}>
-            App v1.0.0
-          </ThemedText>
-          <ThemedText style={styles.footerText}>
-            Made with ❤️
-          </ThemedText>
-        </View>
-      </ScrollView>
-    </SafeAreaView>
+          <View style={styles.footer}>
+            <ThemedText style={styles.footerText}>
+              App v1.0.0
+            </ThemedText>
+            <ThemedText style={styles.footerText}>
+              Made with ❤️
+            </ThemedText>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </AuthGuard>
   );
 }
 

@@ -12,8 +12,6 @@ interface AdFrequencyData {
   totalShown: number;
   userInteractions: number;
   sessionStartTime: number;
-  lastInterstitialTime?: number;
-  minInterval?: number;
 }
 
 interface AdTimingResult {

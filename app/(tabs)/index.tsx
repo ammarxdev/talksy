@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Animated as RNAnimated, Easing } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+// GestureHandlerRootView removed as it is already at root
 
 import ModelViewer from '@/components/ModelViewer';
 import { ThemedText } from '@/components/ThemedText';
@@ -10,8 +10,12 @@ import VoiceAssistantBanner from '@/components/ads/VoiceAssistantBanner';
 
 import { useTheme } from '@/hooks/useTheme';
 import { useModelTheme } from '@/hooks/useModelTheme';
+// @ts-ignore
+import { useInterstitialAd } from '@/hooks/useInterstitialAd';
+import { useFocusEffect } from 'expo-router';
 import { useVoiceAssistantContext } from '@/components/VoiceAssistantProviderWrapper';
 import { useResponsive, useResponsiveSpacing, useResponsiveTypography, useResponsiveLayout } from '@/hooks/useResponsive';
+import { AuthGuard } from '@/components/AuthGuard';
 
 export default function VoiceAssistantScreen() {
   const [bannerHeight, setBannerHeight] = useState(0);
@@ -35,6 +39,40 @@ export default function VoiceAssistantScreen() {
     error: voiceError,
   } = useVoiceAssistantContext();
 
+  const { showAd, adState } = useInterstitialAd();
+
+  // Refs to track state for focus effect without triggering re-runs
+  const assistantStateRef = useRef(assistantState);
+  assistantStateRef.current = assistantState;
+  const adStateRef = useRef(adState);
+  adStateRef.current = adState;
+
+  useFocusEffect(
+    React.useCallback(() => {
+      const tryShowAd = async (source: string) => {
+        // Only show if ad is loaded and user is NOT in an active voice session
+        if (adStateRef.current.isLoaded && assistantStateRef.current === 'idle') {
+          console.log(`📱 Showing interstitial ad (${source})`);
+          await showAd();
+        } else {
+          console.log(`⚠️ Skipping ad (${source}): loaded=${adStateRef.current.isLoaded}, state=${assistantStateRef.current}`);
+        }
+      };
+
+      // 1. Initial check on focus
+      tryShowAd('focus');
+
+      // 2. Set up interval for every 2 minutes
+      const intervalId = setInterval(() => {
+        tryShowAd('interval');
+      }, 120000); // 2 minutes
+
+      return () => {
+        clearInterval(intervalId);
+      };
+    }, [showAd])
+  );
+
   const fadeAnim = useRef(new RNAnimated.Value(0)).current;
   const floatAnim = useRef(new RNAnimated.Value(0)).current;
   const pulseAnim = useRef(new RNAnimated.Value(1)).current;
@@ -43,6 +81,9 @@ export default function VoiceAssistantScreen() {
 
   // Get the status text, with initialization state handling
   const getDisplayStatusText = () => {
+    if (voiceError) {
+      return voiceError;
+    }
     if (!isInitialized) {
       return 'Initializing...';
     }
@@ -82,7 +123,7 @@ export default function VoiceAssistantScreen() {
   }, []);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <AuthGuard requireAuth={true}>
       <View style={styles.container}>
         <LinearGradient
           colors={[modelColors.gradientStart, modelColors.gradientMiddle, modelColors.gradientEnd, modelColors.surface]}
@@ -157,7 +198,7 @@ export default function VoiceAssistantScreen() {
           onHeightChange={(height) => setBannerHeight(height)}
         />
       </View>
-    </GestureHandlerRootView>
+    </AuthGuard>
   );
 }
 

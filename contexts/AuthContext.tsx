@@ -172,13 +172,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       if (!isSupabaseConfigured || !supabase) return { error: new Error('Auth not configured') };
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
           emailRedirectTo: redirectUrl,
         },
       });
+
+      if (!error && data?.session) {
+        setSession(data.session);
+        setUser(data.session.user ?? null);
+      }
       return { error };
     } catch (error) {
       return { error };
@@ -192,10 +197,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setLoading(true);
       if (!isSupabaseConfigured || !supabase) return { error: new Error('Auth not configured') };
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
+
+      if (!error && data?.session) {
+        setSession(data.session);
+        setUser(data.session.user ?? null);
+      }
       return { error };
     } catch (error) {
       return { error };

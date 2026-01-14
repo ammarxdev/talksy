@@ -35,11 +35,11 @@ export function AdFallback({
   const { colors } = useTheme();
 
   // Different styling for different ad types
-  const containerStyle = adType === 'banner' 
+  const containerStyle = adType === 'banner' || adType === 'rewarded'
     ? styles.bannerContainer 
     : styles.interstitialContainer;
 
-  const textStyle = adType === 'banner'
+  const textStyle = adType === 'banner' || adType === 'rewarded'
     ? styles.bannerText
     : styles.interstitialText;
 
@@ -93,10 +93,10 @@ export function AdFallback({
         )}
       </View>
 
-      {adType === 'banner' && (
+      {(adType === 'banner' || adType === 'rewarded') && (
         <View style={[styles.bannerIndicator, { backgroundColor: colors.textSecondary + '30' }]}>
           <Text style={[styles.bannerIndicatorText, { color: colors.textSecondary }]}>
-            Ad Space
+            {adType === 'rewarded' ? 'Reward' : 'Ad Space'}
           </Text>
         </View>
       )}
@@ -118,12 +118,12 @@ export function AdLoadingPlaceholder({
   adType, 
   style 
 }: { 
-  adType: 'banner' | 'interstitial';
+  adType: 'banner' | 'interstitial' | 'rewarded';
   style?: any;
 }) {
   const { colors } = useTheme();
 
-  const containerStyle = adType === 'banner' 
+  const containerStyle = adType === 'banner' || adType === 'rewarded'
     ? styles.bannerContainer 
     : styles.interstitialContainer;
 

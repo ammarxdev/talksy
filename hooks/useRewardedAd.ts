@@ -8,7 +8,6 @@ import { AppState, AppStateStatus } from 'react-native';
 import { rewardedAdService } from '@/services/RewardedAdService';
 import { adFrequencyManager } from '@/utils/adFrequencyManager';
 import { networkMonitor } from '@/utils/networkMonitor';
-import { ADMOB_CONFIG } from '@/config/admob';
 
 export interface UseRewardedAdResult {
   // Ad state
@@ -62,13 +61,7 @@ export const useRewardedAd = (): UseRewardedAdResult => {
 
   // Get time until next ad can be shown (based on frequency management)
   const getTimeUntilNextAd = useCallback((): number => {
-    const stats = adFrequencyManager.getStats();
-    const now = Date.now();
-    const lastInterstitialTime = stats.lastInterstitialTime || stats.lastShown;
-    const minInterval = ADMOB_CONFIG.interstitialFrequency.minInterval;
-    const nextAllowedTime = lastInterstitialTime + minInterval;
-    const timeUntilNext = Math.max(0, nextAllowedTime - now);
-    return timeUntilNext;
+    return adFrequencyManager.getTimeUntilNextInterstitial();
   }, []);
 
   // Get ad frequency statistics

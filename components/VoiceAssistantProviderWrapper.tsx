@@ -4,7 +4,6 @@ import { Audio } from 'expo-av';
 import { API_CONFIG } from '@/config/api';
 import { useModel } from '@/contexts/ModelContext';
 import { voiceSessionTracker } from '@/utils/voiceSessionTracker';
-import { interstitialAdService } from '@/services/InterstitialAdService';
 import { getSupabaseAnonKey } from '@/config/supabase';
 import * as FileSystem from 'expo-file-system';
 import LiveAudioStream from 'react-native-live-audio-stream';
@@ -29,8 +28,8 @@ export interface VoiceAssistantContextType {
   isInitialized: boolean; // New: Indicates if the voice assistant is ready to be used
   initializationError: string | null; // New: Tracks any initialization errors
 }
- 
- const VoiceAssistantContext = createContext<VoiceAssistantContextType | undefined>(undefined);
+
+const VoiceAssistantContext = createContext<VoiceAssistantContextType | undefined>(undefined);
 
 const createPCM16Sound = async (pcmBuffer: Buffer) => {
   const sampleRate = 24000;
@@ -66,68 +65,42 @@ const createPCM16Sound = async (pcmBuffer: Buffer) => {
 };
 
 const playSoundAndWait = async (sound: Audio.Sound, expectedMs: number) => {
-  try {
-    await sound.playAsync();
-    
-    // Wait for the sound to finish playing or timeout after expected duration + buffer
-    const timeoutMs = expectedMs + 500; // Add 500ms buffer
-    
-    return new Promise<void>((resolve) => {
-      const startTime = Date.now();
-      
-      const checkStatus = async () => {
-        try {
-          const status = await sound.getStatusAsync();
-          
-          if (status.isLoaded && status.didJustFinish) {
-            resolve();
-          } else if (status.isLoaded && !status.isPlaying) {
-            // If not playing anymore, resolve
-            resolve();
-          } else if (Date.now() - startTime > timeoutMs) {
-            // Timeout reached
-            console.log(`⏰ Audio playback timeout after ${timeoutMs}ms`);
-            resolve();
-          } else {
-            // Continue checking
-            setTimeout(checkStatus, 50);
-          }
-        } catch (error) {
-          console.warn('⚠️ Error checking sound status:', error);
-          resolve();
-        }
-      };
-      
-      setTimeout(checkStatus, 50);
+  await sound.playAsync();
+  await new Promise<void>((resolve) => {
+    let finished = false;
+    const safetyTimeout = setTimeout(() => {
+      if (finished) return;
+      finished = true;
+      resolve();
+    }, expectedMs + 350);
+
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(safetyTimeout);
+      resolve();
+    };
+
+    sound.setOnPlaybackStatusUpdate((status) => {
+      if (!status.isLoaded) {
+        finish();
+        return;
+      }
+      if (status.didJustFinish) {
+        finish();
+      }
     });
-  } catch (error) {
-    console.warn('⚠️ Error playing sound:', error);
-    // Resolve anyway to prevent hanging
-    return Promise.resolve();
-  }
+  });
 };
 
 const cleanupSound = async (sound: Audio.Sound, uri: string) => {
   try {
-    const status = await sound.getStatusAsync();
-    if (status.isLoaded && status.isPlaying) {
-      await sound.stopAsync();
-    }
-  } catch {
-    // Ignore errors during status check
-  }
-  
-  try {
     await sound.unloadAsync();
   } catch {
-    // Ignore errors during unload
   }
-  
-  // Clean up temp file
   try {
     await FileSystem.deleteAsync(uri, { idempotent: true });
   } catch {
-    // Ignore errors during file cleanup
   }
 };
 
@@ -139,7 +112,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
   const [isVADActive, setIsVADActive] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<any[]>([]);
   const [currentText, setCurrentText] = useState('');
-  
+
   // New: Initialization state tracking
   const [isInitialized, setIsInitialized] = useState(false);
   const [initializationError, setInitializationError] = useState<string | null>(null);
@@ -192,7 +165,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
 
       try {
         console.log('🔧 Initializing voice assistant...');
-        
+
         // Wait for model info to be available
         if (!selectedModelInfo || !selectedModelInfo.voice) {
           console.log('⏳ Waiting for model info...');
@@ -248,8 +221,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
 
     if (audioPlayerRef.current) {
       try {
-        const currentPlayer = audioPlayerRef.current;
-        await currentPlayer.stopAsync();
+        await audioPlayerRef.current.stopAsync();
       } catch {
       }
       try {
@@ -258,43 +230,30 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
       }
       audioPlayerRef.current = null;
     }
-    
-    // Cancel any ongoing drain promises
-    if (drainPromiseRef.current) {
-      drainPromiseRef.current = null;
-    }
   }, []);
 
   const setAudioModeForMic = useCallback(async () => {
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        // Force loudspeaker on Android
-        playThroughEarpieceAndroid: false,
-        shouldDuckAndroid: true,
-      });
-    } catch (error) {
-      console.warn('⚠️ Audio mode for mic failed:', error);
-    }
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+      // Force loudspeaker on Android
+      playThroughEarpieceAndroid: false,
+      shouldDuckAndroid: true,
+    });
   }, []);
 
   const setAudioModeForPlayback = useCallback(async () => {
     // Best-effort loudspeaker routing:
     // - Android: keep speaker
     // - iOS: using allowsRecordingIOS=false will use Playback category which routes to speaker.
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        playThroughEarpieceAndroid: false,
-        shouldDuckAndroid: true,
-      });
-    } catch (error) {
-      console.warn('⚠️ Audio mode for playback failed:', error);
-    }
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: false,
+      playThroughEarpieceAndroid: false,
+      shouldDuckAndroid: true,
+    });
   }, []);
 
   const startMicStreaming = useCallback(() => {
@@ -323,7 +282,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     if (currentSession) {
       console.log(`🧹 Cleaning up existing session: ${currentSession}`);
     }
-    
+
     // Stop any ongoing mic streaming FIRST to prevent more audio being sent
     try {
       if (isStreamingRef.current) {
@@ -332,7 +291,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
       }
     } catch {
     }
-    
+
     // Remove audio listener to prevent duplicate sends
     if (liveAudioSubscriptionRef.current) {
       try {
@@ -341,18 +300,18 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
       }
       liveAudioSubscriptionRef.current = null;
     }
-    
+
     // Clear response timeout
     if (responseTimeoutRef.current) {
       clearTimeout(responseTimeoutRef.current);
       responseTimeoutRef.current = null;
     }
-    
+
     // Close existing WebSocket with proper cleanup
     const existingWs = wsRef.current;
     if (existingWs) {
       wsRef.current = null;  // Clear ref BEFORE closing to prevent onclose from reconnecting
-      
+
       // Try to cancel any in-flight response before closing
       if (existingWs.readyState === WebSocket.OPEN) {
         try {
@@ -360,7 +319,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
         } catch {
         }
       }
-      
+
       try {
         existingWs.onclose = null;  // Prevent reconnect logic
         existingWs.onerror = null;
@@ -370,7 +329,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
       } catch {
       }
     }
-    
+
     // Stop audio playback (inline to avoid circular dependency)
     audioBufferRef.current = [];
     isPlayingRef.current = false;
@@ -389,7 +348,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
       }
       audioPlayerRef.current = null;
     }
-    
+
     // Reset all state flags
     awaitingResponseRef.current = false;
     responseInProgressRef.current = false;
@@ -400,10 +359,10 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     aiResponseDoneRef.current = false;
     isPlaybackModeRef.current = false;
     bargeInInProgressRef.current = false;
-    
+
     sessionIdRef.current = null;
     activeSessionCountRef.current = Math.max(0, activeSessionCountRef.current - 1);
-    
+
     console.log(`📊 Active sessions after cleanup: ${activeSessionCountRef.current}`);
   }, []);
 
@@ -417,7 +376,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     suppressAiAudioUntilMsRef.current = Date.now() + 750;
     shouldSendMicAudioRef.current = true;
     hadSpeechRef.current = false;
-    
+
     // Clear response timeout on barge-in
     if (responseTimeoutRef.current) {
       clearTimeout(responseTimeoutRef.current);
@@ -426,21 +385,16 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     responseInProgressRef.current = false;
     awaitingResponseRef.current = false;
 
-    // Stop audio playback first
     audioBufferRef.current = [];
     isPlayingRef.current = false;
     try {
       await stopPlayback();
     } catch {
     }
-    
-    // Cancel AI response
     try {
       ws.send(JSON.stringify({ type: 'response.cancel' }));
     } catch {
     }
-    
-    // Switch to mic mode and restart streaming
     try {
       await setAudioModeForMic();
     } catch {
@@ -454,33 +408,33 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
   const safeRequestResponse = useCallback((ws: WebSocket) => {
     const now = Date.now();
     const MIN_RESPONSE_INTERVAL = 500; // Minimum 500ms between response.create calls
-    
+
     // Prevent duplicate calls too close together
     if (now - lastResponseCreateTimeRef.current < MIN_RESPONSE_INTERVAL) {
       console.log('⏳ Response.create skipped - too soon since last request');
       return;
     }
-    
+
     // Don't send if already awaiting or response in progress
     if (awaitingResponseRef.current || responseInProgressRef.current) {
       console.log('⏳ Response.create skipped - already awaiting/in-progress');
       return;
     }
-    
+
     if (ws.readyState !== WebSocket.OPEN) {
       console.log('⏳ Response.create skipped - WebSocket not open');
       return;
     }
-    
+
     try {
       console.log('📤 Sending input_audio_buffer.commit + response.create');
       ws.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
       ws.send(JSON.stringify({ type: 'response.create' }));
-      
+
       lastResponseCreateTimeRef.current = now;
       awaitingResponseRef.current = true;
       hadSpeechRef.current = false;
-      
+
       // Set a timeout to reset stuck states (15 seconds max wait for response)
       if (responseTimeoutRef.current) {
         clearTimeout(responseTimeoutRef.current);
@@ -505,34 +459,27 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     if (drainPromiseRef.current) return drainPromiseRef.current;
 
     const bytesPerMs = 48; // 24kHz * 16-bit mono => 48000 bytes/sec
-    const minPlayBytes = bytesPerMs * 150; // Further reduced prebuffer for smoother playback
-    const maxPlayBytes = bytesPerMs * 1000; // Further reduced max segment size for more responsive playback
+    const minPlayBytes = bytesPerMs * 420; // ~420ms prebuffer (more jitter tolerance)
+    const maxPlayBytes = bytesPerMs * 2600; // max ~2.6s per segment (preload can keep up)
 
     const dequeueSegment = () => {
       if (audioBufferRef.current.length === 0) return null;
 
-      // Don't wait for minPlayBytes if AI response is done - play immediately
-      if (aiResponseDoneRef.current) {
-        const next = audioBufferRef.current[0];
-        if (!next) return null;
-        audioBufferRef.current.shift();
-        return next;
+      if (!aiResponseDoneRef.current) {
+        let available = 0;
+        for (let i = 0; i < audioBufferRef.current.length; i += 1) {
+          available += audioBufferRef.current[i].length;
+          if (available >= minPlayBytes) break;
+        }
+        if (available < minPlayBytes) return null;
       }
-
-      // For ongoing responses, accumulate some bytes for smoother playback
-      let available = 0;
-      for (let i = 0; i < audioBufferRef.current.length; i += 1) {
-        available += audioBufferRef.current[i].length;
-        if (available >= minPlayBytes) break;
-      }
-      
-      if (available < minPlayBytes) return null; // Wait for more data if response not done
 
       const pcmChunks: Buffer[] = [];
       let total = 0;
       while (audioBufferRef.current.length > 0 && total < maxPlayBytes) {
         const next = audioBufferRef.current[0];
         if (!next) break;
+        if (!aiResponseDoneRef.current && total > 0 && total + next.length > maxPlayBytes) break;
         pcmChunks.push(next);
         total += next.length;
         audioBufferRef.current.shift();
@@ -574,8 +521,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
             const seg = dequeueSegment();
             if (!seg) {
               if (aiResponseDoneRef.current) break;
-              // Reduce sleep time for more responsive audio playback
-              await new Promise<void>((r) => setTimeout(r, 8));
+              await new Promise<void>((r) => setTimeout(r, 25));
               continue;
             }
             current = await createPCM16Sound(seg);
@@ -629,19 +575,19 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
       clearTimeout(responseTimeoutRef.current);
       responseTimeoutRef.current = null;
     }
-    
+
+    if (reconnectTimerRef.current) {
+      clearTimeout(reconnectTimerRef.current);
+      reconnectTimerRef.current = null;
+    }
+    reconnectAttemptRef.current = 0;
+    isConnectingRef.current = false;
+
     // Reset response tracking refs
     awaitingResponseRef.current = false;
     responseInProgressRef.current = false;
     lastResponseCreateTimeRef.current = 0;
-    
-    // Clear audio buffers
-    audioBufferRef.current = [];
-    isPlayingRef.current = false;
-    
-    // Stop any ongoing playback
-    await stopPlayback();
-    
+
     // Clear session tracking
     sessionIdRef.current = null;
 
@@ -679,22 +625,6 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
 
     voiceSessionTracker.endSession();
 
-    // Check if we should show an interstitial ad after this session
-    // but only if it was a meaningful session
-    if (currentSession) {
-      setTimeout(() => {
-        const shouldShowAd = voiceSessionTracker.shouldShowInterstitialAd();
-        if (shouldShowAd) {
-          const canShow = interstitialAdService.canShowAd();
-          if (canShow.canShow) {
-            interstitialAdService.showAd().catch((error: any) => {
-              console.log('⚠️ Interstitial ad not shown:', error.message || error);
-            });
-          }
-        }
-      }, 1500); // 1.5 second delay to ensure session is properly ended
-    }
-
     if (!wsToClose) {
       closeRequestedRef.current = false;
       isStoppingRef.current = false;
@@ -707,10 +637,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (nextState) => {
-      if (nextState === 'background' && assistantStateRef.current !== 'idle') {
-        if (interstitialAdService.getState().isShowing) {
-          return;
-        }
+      if (nextState !== 'active' && assistantStateRef.current !== 'idle') {
         stopConversation();
       }
     });
@@ -733,13 +660,13 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     // Generate new session ID for tracking
     const newSessionId = generateSessionId();
     console.log(`🆕 Starting new session: ${newSessionId} (mode: ${mode})`);
-    
+
     // Check for duplicate sessions (should never exceed 1)
     if (activeSessionCountRef.current > 0) {
       console.warn(`⚠️ WARNING: ${activeSessionCountRef.current} active session(s) detected! Cleaning up...`);
       await cleanupExistingSession();
     }
-    
+
     // If there's an existing WebSocket in any state, clean it up first
     if (wsRef.current) {
       console.log('🧹 Cleaning up existing WebSocket before new connection');
@@ -749,7 +676,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
     isConnectingRef.current = true;
     sessionIdRef.current = newSessionId;
     activeSessionCountRef.current += 1;
-    
+
     console.log(`📊 Active sessions: ${activeSessionCountRef.current}`);
 
     if (mode === 'fresh') {
@@ -768,7 +695,12 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
 
       const permission = await Audio.requestPermissionsAsync();
       if (!permission.granted) {
-        throw new Error('Microphone permission not granted');
+        console.log('⚠️ Microphone permission denied - strictly optional');
+        // Gracefully handle denial: simply show message and return to idle
+        setError('Microphone access is optional');
+        setAssistantState('idle');
+        isConnectingRef.current = false;
+        return;
       }
 
       await setAudioModeForMic();
@@ -885,7 +817,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
               sumSq += s * s;
             }
             const rms = Math.sqrt(sumSq / Math.max(1, Math.floor(sampleCount / 8)));
-            
+
             // INCREASED threshold from 0.028 to 0.055 to reduce sensitivity to background/far-field sounds
             // This helps filter out distant voices and ambient noise
             // Only direct, close voice input should trigger speech detection
@@ -968,7 +900,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
 
       ws.onmessage = async (event: { data: string }) => {
         const msg = JSON.parse(event.data);
-        
+
         const msgType = msg.type;
 
         // Only log non-audio events to reduce noise
@@ -994,8 +926,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
               }
               awaitingResponseRef.current = false;
               responseInProgressRef.current = true;  // AI is actively generating response
-              
-              // Only switch audio mode if we're not already in playback mode
+
               if (assistantStateRef.current !== 'speaking') {
                 shouldSendMicAudioRef.current = false;
                 hadSpeechRef.current = false;
@@ -1003,7 +934,6 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
                 if (!isPlaybackModeRef.current) {
                   isPlaybackModeRef.current = true;
                   try {
-                    // Use immediate mode switching to avoid audio interruptions
                     void setAudioModeForPlayback();
                   } catch {
                   }
@@ -1018,31 +948,25 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
           case 'response.audio.done':
             aiResponseDoneRef.current = true;
             responseInProgressRef.current = false;  // AI finished generating this response
-            
+
             // Clear any response timeout
             if (responseTimeoutRef.current) {
               clearTimeout(responseTimeoutRef.current);
               responseTimeoutRef.current = null;
             }
-            
+
             await drainPlaybackQueue();
             // After AI finishes speaking, resume mic for hands-free realtime conversation.
             if (wsRef.current?.readyState === WebSocket.OPEN && !isStoppingRef.current) {
-              // Reset flags before switching audio modes
               shouldSendMicAudioRef.current = true;
               awaitingResponseRef.current = false;  // Ensure this is reset
-              responseInProgressRef.current = false;  // Make sure response is marked as complete
-              
-              // Switch audio mode before restarting mic
               try {
-                isPlaybackModeRef.current = false;
                 await setAudioModeForMic();
-                startMicStreaming();
-                
-                // Only change state after mic is restarted
-                setAssistantState('calling');
               } catch {
-                // If there's an error, still set state to calling
+              }
+              isPlaybackModeRef.current = false;
+              startMicStreaming();
+              if (assistantStateRef.current !== 'speaking') {
                 setAssistantState('calling');
               }
             }
@@ -1072,7 +996,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
             setCurrentText('');
             hadSpeechRef.current = true;
             suppressMicSendUntilMsRef.current = 0;
-            
+
             // Only cancel and barge-in if AI is actually speaking
             if (assistantStateRef.current === 'speaking') {
               performBargeIn();
@@ -1089,7 +1013,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
             console.log('🎤 Speech ended');
             setIsVADActive(false);
             localSpeechActiveRef.current = false;
-            
+
             // Use safeRequestResponse to prevent duplicates and handle timeouts
             if (hadSpeechRef.current && shouldSendMicAudioRef.current && wsRef.current) {
               safeRequestResponse(wsRef.current);
@@ -1119,28 +1043,17 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
 
       ws.onerror = (e: any) => {
         console.error('❌ WebSocket Network Error:', e);
-        
-        // Clear any response timeout on error
-        if (responseTimeoutRef.current) {
-          clearTimeout(responseTimeoutRef.current);
-          responseTimeoutRef.current = null;
-        }
-        
-        // Reset response tracking
-        responseInProgressRef.current = false;
-        awaitingResponseRef.current = false;
-        
         setError('Connection failed');
         setAssistantState('error');
       };
 
       ws.onclose = () => {
         console.log(`🔌 WebSocket Closed (Session: ${newSessionId})`);
-        
+
         // Decrement active session count
         activeSessionCountRef.current = Math.max(0, activeSessionCountRef.current - 1);
         console.log(`📊 Active sessions after close: ${activeSessionCountRef.current}`);
-        
+
         // Stop live audio streaming when WebSocket closes
         stopMicStreaming();
 
@@ -1175,7 +1088,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
           console.log(`⚠️ Note: Each reconnect creates a new API session`);
           setError('Connection lost. Reconnecting...');
           setAssistantState('connecting');
-          
+
           // Clear playback before reconnect (fire-and-forget)
           audioBufferRef.current = [];
           isPlayingRef.current = false;
@@ -1197,7 +1110,7 @@ export function VoiceAssistantProvider({ children }: { children: ReactNode }) {
       };
 
     } catch (err: any) {
-      console.error('❌ Failed to start conversation:', err);
+
       setError(err.message || 'Failed to connect');
       setAssistantState('error');
       Alert.alert('Connection Error', 'Could not establish realtime connection with Grok.');

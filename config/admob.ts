@@ -81,7 +81,7 @@ export const IS_DEVELOPMENT = __DEV__;
 
 // Control whether to use real AdMob IDs (production) vs Google's test IDs
 // Set EXPO_PUBLIC_USE_REAL_ADS=true in production builds only.
-const USE_REAL_ADS = process.env.EXPO_PUBLIC_USE_REAL_ADS === 'true';
+const USE_REAL_ADS = !__DEV__ && process.env.EXPO_PUBLIC_USE_REAL_ADS === 'true';
 export const FORCE_PRODUCTION_ADS = false; // deprecated, kept for backward compatibility
 
 // Current ad unit IDs based on environment flag

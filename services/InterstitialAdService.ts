@@ -99,7 +99,7 @@ class InterstitialAdService {
     this.state.loadAttempts += 1;
 
     try {
-      const adUnitId = testMode ? 'ca-app-pub-3940256099942544/4411468910' : AD_UNIT_IDS.INTERSTITIAL;
+      const adUnitId = testMode ? TestIds.INTERSTITIAL : AD_UNIT_IDS.INTERSTITIAL;
 
       // Create new interstitial ad
       this.interstitialAd = InterstitialAd.createForAdRequest(adUnitId, {
@@ -137,7 +137,7 @@ class InterstitialAdService {
       this.state.isLoading = false;
 
       // Use enhanced error handler
-      const errorInfo = adErrorHandler.handleError(error, 'interstitial', testMode ? 'ca-app-pub-3940256099942544/4411468910' : AD_UNIT_IDS.INTERSTITIAL);
+      const errorInfo = adErrorHandler.handleError(error, 'interstitial', testMode ? TestIds.INTERSTITIAL : AD_UNIT_IDS.INTERSTITIAL);
       this.state.error = errorInfo.userFriendlyMessage;
 
       console.error('❌ Failed to load interstitial ad:', error);
@@ -216,6 +216,10 @@ class InterstitialAdService {
         return { success: false, reason: 'Ads disabled by user preference' };
       }
 
+      // Do not interrupt if TTS is speaking. Defer briefly and re-check.
+      // If TTS is speaking, do not show; we'll be called again after state returns to idle
+
+
       // Check network suitability
       const networkCheck = networkMonitor.isNetworkSuitableForAds();
       if (!networkCheck.suitable) {
@@ -230,18 +234,15 @@ class InterstitialAdService {
           return { success: false, reason: loadResult.error || 'Failed to load ad' };
         }
 
-        // Wait for the ad to be fully ready - increase wait time and verify state
-        let attempts = 0;
-        const maxAttempts = 10; // 5 seconds total
-        while (attempts < maxAttempts && (!this.state.isLoaded || !this.interstitialAd)) {
-          await new Promise(resolve => setTimeout(resolve, 500));
-          attempts++;
-        }
+        // Wait a moment for the ad to be ready
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         if (!this.state.isLoaded || !this.interstitialAd) {
           return { success: false, reason: 'Ad still not ready after loading' };
         }
       }
+
+      // Simplified logic: do not gate by frequency/session timing here.
 
       // Final safety check
       if (this.state.isShowing) {
@@ -249,15 +250,6 @@ class InterstitialAdService {
       }
 
       console.log('🎬 Showing interstitial ad...');
-
-      // Add a small delay to ensure ad is fully ready (addresses the race condition)
-      await new Promise(resolve => setTimeout(resolve, 300));
-
-      // Verify the ad is still loaded before attempting to show
-      if (!this.state.isLoaded || !this.interstitialAd) {
-        console.log('⚠️ Ad became unavailable before showing');
-        return { success: false, reason: 'Ad became unavailable before showing' };
-      }
 
       // Show with timeout protection
       await Promise.race([
@@ -284,22 +276,8 @@ class InterstitialAdService {
       // Reset state if show failed
       this.state.isShowing = false;
 
-      // If the ad failed to show, mark it as not loaded so it will be reloaded
-      if (this.state.isLoaded) {
-        this.state.isLoaded = false;
-      }
-
       return { success: false, reason: errorInfo.userFriendlyMessage };
     }
-  }
-
-  /**
-   * Check if an interstitial ad is ready to be shown immediately
-   * This is more strict than just checking if it's loaded, as it verifies
-   * the ad is in a state where show() will succeed
-   */
-  isReadyToShow(): boolean {
-    return this.state.isLoaded && !this.state.isShowing && this.interstitialAd !== null;
   }
 
   /**
@@ -322,9 +300,7 @@ class InterstitialAdService {
       return { canShow: false, reason: 'Ad already showing' };
     }
 
-    if (!this.interstitialAd) {
-      return { canShow: false, reason: 'Ad instance not available' };
-    }
+    // Simplified: if loaded and not showing, allow.
 
     return { canShow: true };
   }

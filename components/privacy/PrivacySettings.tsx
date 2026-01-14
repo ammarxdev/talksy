@@ -35,12 +35,12 @@ export function PrivacySettings() {
         </Text>
         
         <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-          You can change your ad preferences at any time. If you're in the EU or California, 
+          You can change your ad preferences at any time. If you&apos;re in the EU or California, 
           you have additional privacy rights that you can exercise through the privacy options.
         </Text>
 
         <Text style={[styles.infoText, { color: colors.textSecondary }]}>
-          All advertisements are provided by Google AdMob and follow Google's privacy policies.
+          All advertisements are provided by Google AdMob and follow Google&apos;s privacy policies.
           No personal conversations or voice data are used for advertising purposes.
         </Text>
 

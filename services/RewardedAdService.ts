@@ -3,8 +3,8 @@
  * Handles Google AdMob Rewarded Video Ads implementation
  */
 
-import { RewardedAd, AdEventType, RewardedAdEventType } from 'react-native-google-mobile-ads';
-import { AD_UNIT_IDS, AD_ERROR_MESSAGES } from '@/config/admob';
+import { RewardedAd, AdEventType, RewardedAdEventType, TestIds } from 'react-native-google-mobile-ads';
+import { AD_UNIT_IDS, AD_ERROR_MESSAGES, AD_ANALYTICS_EVENTS } from '@/config/admob';
 import { adErrorHandler } from './AdErrorHandler';
 import { adMobService } from './AdMobService';
 import { adFrequencyManager } from '@/utils/adFrequencyManager';
@@ -110,7 +110,7 @@ class RewardedAdService {
     this.state.loadAttempts += 1;
 
     try {
-      const adUnitId = testMode ? 'ca-app-pub-3940256099942544/1712485313' : AD_UNIT_IDS.REWARDED;
+      const adUnitId = testMode ? TestIds.REWARDED : AD_UNIT_IDS.REWARDED;
 
       // Create new rewarded ad
       this.rewardedAd = RewardedAd.createForAdRequest(adUnitId, {
@@ -148,7 +148,7 @@ class RewardedAdService {
       this.state.isLoading = false;
 
       // Use enhanced error handler
-      const errorInfo = adErrorHandler.handleError(error, 'rewarded', testMode ? 'ca-app-pub-3940256099942544/1712485313' : AD_UNIT_IDS.REWARDED);
+      const errorInfo = adErrorHandler.handleError(error, 'rewarded', testMode ? TestIds.REWARDED : AD_UNIT_IDS.REWARDED);
       this.state.error = errorInfo.userFriendlyMessage;
 
       console.error('❌ Failed to load rewarded ad:', error);
@@ -222,7 +222,7 @@ class RewardedAdService {
         this.onUserEarnedRewardCallback(rewardInfo as RewardedAdReward);
       }
 
-      adMobService.logAdEvent('ad_rewarded', 'rewarded', {
+      adMobService.logAdEvent(AD_ANALYTICS_EVENTS.AD_REWARDED, 'rewarded', {
         reward_type: rewardInfo.type,
         reward_amount: rewardInfo.amount,
       });

@@ -13,7 +13,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAlert } from '@/contexts/AlertContext';
-import { router } from 'expo-router';
 import { AuthGuard } from '@/components/AuthGuard';
 
 type AuthMode = 'login' | 'signup' | 'verification';
@@ -51,8 +50,6 @@ export default function AuthScreen() {
         const { error } = await signIn(email, password);
         if (error) {
           showError(error.message, 'Login Failed');
-        } else {
-          router.replace('/(tabs)');
         }
       } else if (mode === 'signup') {
         const { error } = await signUp(email, password);

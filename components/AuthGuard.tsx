@@ -18,12 +18,16 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
 
   useEffect(() => {
     if (!loading) {
+      const segmentList = (segments as unknown as string[]) ?? [];
+      const isOnAuthScreen = segmentList.includes('auth');
+      const isOnTabsGroup = segmentList.includes('(tabs)');
+
       // Special handling for password reset flow: force user into the completion screen
       // so we don't get stuck showing intermediary screens.
       if (isPasswordResetFlow && user) {
-        const segmentList = (segments as unknown as string[]) ?? [];
         const isOnResetComplete = segmentList.includes('reset-password-complete');
         if (!isOnResetComplete) {
+          console.log('[AuthGuard] Reset flow redirect');
           router.replace('/reset-password-complete' as any);
         }
         return;
@@ -31,10 +35,18 @@ export const AuthGuard: React.FC<AuthGuardProps> = ({
 
       if (requireAuth && !user) {
         // User is not authenticated, redirect to auth screen
-        router.replace('/auth');
+        if (!isOnAuthScreen) {
+          console.log('[AuthGuard] Not authenticated, redirecting to /auth');
+          router.replace('/auth');
+        }
       } else if (!requireAuth && user) {
         // User is authenticated but on auth screen, redirect to main app (unless in password reset flow)
-        router.replace('/(tabs)');
+        // Important: do not repeatedly replace while already inside (tabs).
+        // This can reset the tab index back to 0 and make tab presses look like they don't work.
+        if (isOnAuthScreen && !isOnTabsGroup) {
+          console.log('[AuthGuard] Authenticated, redirecting to /(tabs)');
+          router.replace('/(tabs)');
+        }
       }
     }
   }, [user, loading, requireAuth, isPasswordResetFlow, segments]);
